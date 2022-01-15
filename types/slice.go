@@ -7,29 +7,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/lib/pq"
 )
 
 type (
-	// ByteSlice …
+	// ByteSliceis a `[]byte`
 	ByteSlice []byte
 
 	// StringSlice for `string`.
 	StringSlice []string
-	// swagger:response stringSlice
-	SSResp struct {
-		// In:body
-		Body StringSlice
-	}
 
 	// UintSlice for `uint`.
-	//
-	// swagger:response uintSlice
 	UintSlice []uint
-
-	// StoreIDList represents a list of store `ID`s.
-	StoreIDList pq.Int64Array
 )
 
 // Validation errors.
@@ -58,8 +46,8 @@ func (sl *UintSlice) ToStringSlice(dst *StringSlice) {
 	}
 }
 
-// ToString for `UintSlice`
-func (sl *UintSlice) ToString() (dst string) {
+// String is the `fmt.Stringer` interface implementation for `UintSlice`
+func (sl *UintSlice) String() (dst string) {
 	lenSl := len(*sl)
 	if lenSl > 0 {
 		buffer := strings.Builder{}
@@ -159,24 +147,4 @@ func (sl *StringSlice) Pop(values ...string) {
 			*sl = append((*sl)[:loc], (*sl)[loc:]...)
 		}
 	}
-}
-
-// ToStringSlice for `StoreIDList`.
-func (sl *StoreIDList) ToStringSlice(dst *StringSlice) {
-	for index := range *sl {
-		(*dst) = append((*dst), fmt.Sprint(((*sl)[index])))
-	}
-}
-
-// HasRole checks for the existence of a store-type ID.
-func (sl *StoreIDList) HasRole(n uint) (resl int) {
-	role := int64(n)
-	for index := range *sl {
-		if (*sl)[index] == role {
-			resl = index
-			return
-		}
-	}
-
-	return
 }

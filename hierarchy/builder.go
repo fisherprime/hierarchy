@@ -16,9 +16,8 @@ type (
 	// Builder defines an interface for entities that can be read into a `HierarchyNode`.
 	Builder interface {
 		GetHierarchyID() string
-		GetHierarchySuperior() string
+		GetHierarchyParent() string
 		GetName() string
-		IsAdminUnitHierarchy() bool
 	}
 )
 
@@ -29,8 +28,9 @@ const (
 // Hierarchy building errors.
 var (
 	ErrEmptyHierarchyBuildSrc = errors.New("empty hierarchy build source")
+	ErrInvalidBuildCache      = errors.New("invalid hierarchy build cache")
 	ErrInvalidHierarchySrc    = errors.New("invalid hierarchy source")
-	ErrLocateSuperiors        = errors.New("unable to locate superior(s)")
+	ErrLocateParents          = errors.New("unable to locate parents(s)")
 	ErrMultipleRootNodes      = errors.New("hierarchy has multiple root nodes")
 
 	ErrOpPanic = errors.New("operation panicked")
@@ -52,7 +52,7 @@ func popHierarchyBuilder(src []Builder, index int) []Builder {
 	return append(src[:base], src[index+1:]...)
 }
 
-// FromBuilder generates a hierarchy from a list of items & superiors.
+// FromBuilder generates a hierarchy from a list of items & parents.
 func FromBuilder(ctx context.Context, src []Builder) (h *Node, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -60,11 +60,12 @@ func FromBuilder(ctx context.Context, src []Builder) (h *Node, err error) {
 		}
 
 		if err != nil {
-			lLogger.Debugf("current hierarchy: %s \nsource remnants", spew.Sprint(h), spew.Sprint(src))
+			lLogger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(src))
 			err = fmt.Errorf("%v: %w", ErrInvalidHierarchySrc, err)
 		}
 	}()
 
+	cache := make(map[string]struct{})
 	select {
 	case <-ctx.Done():
 		err = fmt.Errorf("build hierarchy: %w", ctx.Err())
@@ -75,36 +76,21 @@ func FromBuilder(ctx context.Context, src []Builder) (h *Node, err error) {
 			return
 		}
 
-		// Work around for the administrative unit dataset's usage of "0".
 		rootIndex := 0
-		if src[rootIndex].IsAdminUnitHierarchy() {
-			for index := range src {
-				if src[index].GetHierarchyID() == RootID {
-					// Disallow additional root node.
-					if h != nil {
-						err = fmt.Errorf("administrative unit %w", ErrMultipleRootNodes)
-						return
-					}
-					h = New(ctx, src[index].GetHierarchyID())
-					rootIndex = index
-
-					continue
-				}
+		for index := range src {
+			if src[index].GetHierarchyParent() != RootID {
+				continue
 			}
-		} else {
-			for index := range src {
-				if src[index].GetHierarchySuperior() == RootID {
-					// Disallow role id 0 as superior.
-					if h != nil {
-						err = fmt.Errorf("role %w", ErrMultipleRootNodes)
-						return
-					}
-					h = New(ctx, src[index].GetHierarchyID())
-					rootIndex = index
 
-					continue
-				}
+			// Disallow additional root node.
+			if h != nil {
+				err = ErrMultipleRootNodes
+				return
 			}
+			id := src[index].GetHierarchyID()
+			h, cache[id] = New(ctx, id), struct{}{}
+
+			rootIndex = index
 		}
 		if h == nil {
 			err = fmt.Errorf("%w: no root node", ErrInvalidHierarchySrc)
@@ -122,31 +108,42 @@ func FromBuilder(ctx context.Context, src []Builder) (h *Node, err error) {
 			}
 
 			if lenSrc == prevLen {
-				err = ErrLocateSuperiors
+				err = ErrLocateParents
 				return
 			}
 			prevLen = lenSrc
 
 			for index := 0; index < lenSrc; index++ {
 				node := src[index]
+				parentID := node.GetHierarchyParent()
 
-				var superiorNode *Node
-				if superiorNode, err = h.Locate(ctx, node.GetHierarchySuperior()); err != nil {
+				// Parent not in hierarchy.
+				if _, ok := cache[parentID]; !ok {
+					continue
+				}
+
+				var parent *Node
+				if parent, err = h.Locate(ctx, parentID); err != nil {
 					if errors.Is(err, ErrIDNotFound) {
-						continue
+						// Inconsistency between the cache & hierarchy.
+						err = fmt.Errorf("%v: %w", ErrInvalidBuildCache, err)
 					}
 					err = fmt.Errorf("build hierarchy: %w", err)
 
 					return
 				}
 
-				if err = superiorNode.AddSubordinate(ctx, New(ctx, node.GetHierarchyID())); err != nil {
+				childID := node.GetHierarchyID()
+				if err = parent.AddChild(ctx, New(ctx, childID)); err != nil {
 					return
 				}
+				cache[childID] = struct{}{}
+
 				src = popHierarchyBuilder(src, index)
 
-				// NOTE: This works around improperly ordered record identifiers; adds extraneous
-				// opcodes.
+				// NOTE: This works around improperly ordered record identifiers; id `1` is a child of
+				// id `5`.
+				// Adds extraneous opcodes.
 				break
 
 				/* index--

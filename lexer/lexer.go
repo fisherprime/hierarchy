@@ -59,7 +59,9 @@ const (
 	ItemEOF              // End of the file
 	ItemValue            // `HierarchyNode` data.
 	ItemEndMarker        // ')'.
+)
 
+const (
 	queryLimit = 512
 
 	// EndMarker a `rune` indicating the end of a node's children.
@@ -69,8 +71,8 @@ const (
 	ValueSplitter = ','
 )
 
-// NewLexer creates a new scanner for the input string
-func NewLexer(logger *logrus.Logger, source string) *Lexer {
+// New creates a new scanner for the input string
+func New(logger *logrus.Logger, source string) *Lexer {
 	return &Lexer{
 		Buffer: make([]rune, 0, 10),
 		Item:   make(chan Item),

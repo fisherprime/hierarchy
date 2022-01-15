@@ -20,22 +20,7 @@ import (
 // `rune`s are singe `UTF-8` codepoints, not used as the hierarchy expects strings.
 
 type (
-	// Node defines an n-array tree to hold hierarchies.
-	//
-	// NOTE: Adding synchronization to this structure is not feasible as of 2021-05-28T07:47:29+0300.
-	Node struct {
-		id string
-
-		// superior holds the node at the upper level.
-		superior *Node
-
-		// subordinates holds nodes at a lower level.
-		subordinates subMap
-	}
-
-	subMap map[string]*Node
-
-	// TraverseChan defines a channel to communicate info between `HierarchyNode`
+	// TraverseChan defines a channel to communicate info between `Node`
 	// operations & it's callers.
 	TraverseChan struct {
 		newPeers bool
@@ -55,21 +40,21 @@ const (
 	// endMarker a `rune` indicating the end of a node's children.
 	endMarker = ')'
 
-	// valueSplitter is the character used to split the `HierarchyNode` serialization output.
+	// valueSplitter is the character used to split the `Node` serialization output.
 	valueSplitter = ','
 
-	notSubordinateFmt = "(%s) %w (%s)"
+	notChildFmt = "(%s) %w (%s)"
 )
 
-// Errors codes encountered when handling a `HierarchyNode`.
+// Errors codes encountered when handling a `Node`.
 var (
-	ErrAlreadySub              = errors.New("is a subordinate of")
+	ErrAlreadyChild            = errors.New("is a child of")
+	ErrEmptyDeserializationSrc = errors.New("empty Node deserialization source")
 	ErrIDNotFound              = errors.New("not found")
-	ErrNotSubordinate          = errors.New("is not a subordinate of")
-	ErrNoSubordinates          = errors.New("lacks subordinates")
-	ErrNoSuperiors             = errors.New("lacks superiors")
+	ErrNoChildren              = errors.New("lacks children ")
+	ErrNoParents               = errors.New("lacks parents")
 	ErrNoTerminalNodes         = errors.New("lacks terminal nodes; tree is cyclic")
-	ErrEmptyDeserializationSrc = errors.New("empty HierarchyNode deserialization source")
+	ErrNotChild                = errors.New("is not a child of")
 )
 
 var (
@@ -78,83 +63,82 @@ var (
 
 func SetLogger(l *logrus.Logger) { lLogger = l }
 
-// New initiates a `HierarchyNode`.
+// New initiates a `Node`.
 func New(_ context.Context, init string) *Node {
 	return &Node{
-		id:           init,
-		subordinates: make(subMap),
+		id:       init,
+		children: make(childMap),
 	}
 }
 
-// AddSubordinate to a `HierarchyNode`.
-func (h *Node) AddSubordinate(ctx context.Context, subordinate *Node) (err error) {
-	// Search for existing immediate subordinate.
-	if h.HasSubordinate(ctx, subordinate.id) > 0 {
-		err = fmt.Errorf("(%s) %w (%s)", subordinate.id, ErrAlreadySub, h.id)
+// AddChild to a `Node`.
+func (h *Node) AddChild(ctx context.Context, child *Node) (err error) {
+	// Search for existing immediate child.
+	if h.HasChild(ctx, child.id) > 0 {
+		err = fmt.Errorf("(%s) %w (%s)", child.id, ErrAlreadyChild, h.id)
 		return
 	}
 
-	subordinate.superior = h
-	h.subordinates[subordinate.id] = subordinate
+	child.parent = h
+	h.children[child.id] = child
 
 	return
 }
 
-// AddSubordinateTo to a `HierarchyNode`.
-func (h *Node) AddSubordinateTo(ctx context.Context, superior string, subordinate *Node) (err error) {
-	var superiorNode *Node
-	if superiorNode, err = h.Locate(ctx, superior); err != nil {
-		err = fmt.Errorf("superior (%s) %w", superior, err)
+// AddChildTo to a `Node`.
+func (h *Node) AddChildTo(ctx context.Context, parentID string, child *Node) (err error) {
+	var parent *Node
+	if parent, err = h.Locate(ctx, parentID); err != nil {
+		err = fmt.Errorf("parent (%s) %w", parentID, err)
 		return
 	}
 
-	return superiorNode.AddSubordinate(ctx, subordinate)
+	return parent.AddChild(ctx, child)
 }
 
-// PopSubordinate removes an immediate subordinate to the `HierarchyNode`.
-func (h *Node) PopSubordinate(ctx context.Context, id string) (subordinate *Node, err error) {
-	var subIndex int
-	if subIndex = h.HasSubordinate(ctx, id); subIndex < 0 {
-		err = fmt.Errorf("subordinate (%s) of (%s): %s", id, h.id, ErrIDNotFound)
+// PopChild removes an immediate child to the `Node`.
+func (h *Node) PopChild(ctx context.Context, childID string) (child *Node, err error) {
+	var index int
+	if index = h.HasChild(ctx, childID); index < 0 {
+		err = fmt.Errorf("child (%s) of (%s): %s", childID, h.id, ErrIDNotFound)
 		return
 	}
 
-	subordinate = h.subordinates[id]
-	delete(h.subordinates, id)
+	child = h.children[childID]
+	delete(h.children, childID)
 
 	return
 }
 
-// HasSubordinate checks for the existence of an immediate subordinate.
-func (h *Node) HasSubordinate(_ context.Context, subordinate string) (index int) {
+// HasChild checks for the existence of an immediate child.
+func (h *Node) HasChild(_ context.Context, childID string) (index int) {
 	index = -1
-
-	if _, ok := h.subordinates[subordinate]; ok {
+	if _, ok := h.children[childID]; ok {
 		index = 1
 	}
 
 	return
 }
 
-// ListImmediateSubordinates lists the immediate subordinates for a `HierarchyNode`.
-func (h *Node) ListImmediateSubordinates(ctx context.Context) (subs *types.StringSlice) {
-	*subs = make(types.StringSlice, 0)
-
-	for _, sub := range h.subordinates {
-		*subs = append(*subs, sub.id)
+// ListImmediateSubordinates lists the immediate children for a `Node`.
+func (h *Node) ListImmediateChildren(ctx context.Context) (children *types.StringSlice) {
+	*children = make(types.StringSlice, 0)
+	for _, child := range h.children {
+		*children = append(*children, child.id)
 	}
+
 	return
 }
 
-// ListSubordinatesTo returns a list of subordinates as defined in `HierarchyNode` for some superior
+// ListChildrenOf returns a list of children as defined in `Node` for some parent
 // model.
 //
 // NOTE: This operation is expensive.
-func (h *Node) ListSubordinatesTo(ctx context.Context, superior string) (subs *types.StringSlice, err error) {
-	subs = new(types.StringSlice)
+func (h *Node) ListChildrenOf(ctx context.Context, parentID string) (children *types.StringSlice, err error) {
+	children = new(types.StringSlice)
 	hierChan := make(chan TraverseChan, traverseBufferSize)
 
-	go h.WalkSubordinatesTo(ctx, superior, hierChan)
+	go h.WalkChildrenOf(ctx, parentID, hierChan)
 
 	for {
 		resl, proceed := <-hierChan
@@ -166,35 +150,35 @@ func (h *Node) ListSubordinatesTo(ctx context.Context, superior string) (subs *t
 			return
 		}
 
-		*subs = append(*subs, resl.node.id)
+		*children = append(*children, resl.node.id)
 	}
 
-	lLogger.Debugf("`HierarchyNode` walk: %+v", *subs)
+	lLogger.Debugf("`Node` walk: %+v", *children)
 
-	lenSubs := len(*subs)
-	if lenSubs > 0 {
+	numChildren := len(*children)
+	if numChildren > 0 {
 		// Omit self from the list.
-		*subs = (*subs)[1:]
+		*children = (*children)[1:]
 
-		lLogger.Debugf("subordinates: %+v", *subs)
+		lLogger.Debugf("children: %+v", *children)
 	}
 
-	if len(*subs) < 1 {
-		err = ErrNoSubordinates
+	if len(*children) < 1 {
+		err = ErrNoChildren
 	}
 
 	return
 }
 
-// ListSubordinatesToWithLevel returns an array-of-arrays of subordinates as defined in
-// `HierarchyNode` for some superior model.
+// ListChildrenOfByLevel returns an array-of-arrays of children as defined in
+// `Node` for some parent model.
 //
 // NOTE: This operation will bottleneck list generation operations.
-func (h *Node) ListSubordinatesToWithLevel(ctx context.Context, superior string) (subs *[]types.StringSlice, err error) {
-	subs = &[]types.StringSlice{}
+func (h *Node) ListChildrenOfByLevel(ctx context.Context, parentID string) (children *[]types.StringSlice, err error) {
+	children = &[]types.StringSlice{}
 	hierChan := make(chan TraverseChan, traverseBufferSize)
 
-	go h.WalkSubordinatesTo(ctx, superior, hierChan)
+	go h.WalkChildrenOf(ctx, parentID, hierChan)
 
 	var peers []string
 	for {
@@ -209,34 +193,34 @@ func (h *Node) ListSubordinatesToWithLevel(ctx context.Context, superior string)
 
 		if resl.newPeers {
 			if len(peers) > 0 {
-				*subs = append(*subs, peers)
+				*children = append(*children, peers)
 			}
 			peers = make([]string, initialQueueLen)
 		}
 		peers = append(peers, resl.node.id)
 	}
 	if len(peers) > 0 {
-		*subs = append(*subs, peers)
+		*children = append(*children, peers)
 	}
 
-	lLogger.Debugf("`HierarchyNode` walk: %+v", *subs)
+	lLogger.Debugf("`Node` walk: %+v", *children)
 
-	lenSubs := len(*subs)
-	if lenSubs > 0 {
+	numChildren := len(*children)
+	if numChildren > 0 {
 		// Omit self from the list.
-		*subs = (*subs)[1:]
+		*children = (*children)[1:]
 
-		lLogger.Debugf("subordinates: %+v", *subs)
+		lLogger.Debugf("children: %+v", *children)
 	}
 
-	if len(*subs) < 1 {
-		err = ErrNoSubordinates
+	if len(*children) < 1 {
+		err = ErrNoChildren
 	}
 
 	return
 }
 
-// ListTerminalNodes returns an array of terminal node data as defined in `HierarchyNode`.
+// ListTerminalNodes returns an array of terminal node data as defined in `Node`.
 func (h *Node) ListTerminalNodes(ctx context.Context) (termItems *types.StringSlice, err error) {
 	termItems = new(types.StringSlice)
 	hierChan := make(chan TraverseChan, traverseBufferSize)
@@ -253,7 +237,7 @@ func (h *Node) ListTerminalNodes(ctx context.Context) (termItems *types.StringSl
 			return
 		}
 
-		if resl.node.subordinates == nil || len(resl.node.subordinates) < 1 {
+		if resl.node.children == nil || len(resl.node.children) < 1 {
 			*termItems = append(*termItems, resl.node.id)
 		}
 	}
@@ -265,21 +249,21 @@ func (h *Node) ListTerminalNodes(ctx context.Context) (termItems *types.StringSl
 	return
 }
 
-// GetSuperiorTo returns the superior `HierarchyNode` for some node identified by its `id`.
-func (h *Node) GetSuperiorTo(ctx context.Context, id string) (superiorNode *Node, err error) {
+// GetParentTo returns the parent `Node` for some node identified by its `id`.
+func (h *Node) GetParentTo(ctx context.Context, childID string) (parent *Node, err error) {
 	var node *Node
-	if node, err = h.Locate(ctx, id); err != nil {
-		err = fmt.Errorf("(%s) %w", id, err)
+	if node, err = h.Locate(ctx, childID); err != nil {
+		err = fmt.Errorf("(%s) %w", childID, err)
 		return
 	}
 
-	// Update the variable to hold the superior node.
-	superiorNode = node.superior
+	// Update the variable to hold the parent node.
+	parent = node.parent
 
 	return
 }
 
-// Locate searches for an `id` & returns it's `HierarchyNode`.
+// Locate searches for an `id` & returns it's `Node`.
 func (h *Node) Locate(ctx context.Context, id string) (node *Node, err error) {
 	select {
 	case <-ctx.Done():
@@ -314,89 +298,94 @@ func (h *Node) locate(ctx context.Context, id string, hierChan chan TraverseChan
 	defer wg.Done()
 	// lLogger.Debugf("locate val %s in %+v", id, h)
 
-	if h.id == id {
-		hierChan <- TraverseChan{node: h}
+	select {
+	case <-ctx.Done():
 		return
-	}
+	default:
+		if h.id == id {
+			hierChan <- TraverseChan{node: h}
+			return
+		}
 
-	if h.subordinates == nil || len(h.subordinates) < 1 {
-		return
-	}
+		if h.children == nil || len(h.children) < 1 {
+			return
+		}
 
-	if node, ok := h.subordinates[id]; ok {
-		hierChan <- TraverseChan{node: node}
-		return
-	}
+		if node, ok := h.children[id]; ok {
+			hierChan <- TraverseChan{node: node}
+			return
+		}
 
-	iWG := new(sync.WaitGroup)
-	iWG.Add(len(h.subordinates))
-	for _, v := range h.subordinates {
-		go v.locate(ctx, id, hierChan, iWG)
+		internalWG := new(sync.WaitGroup)
+		internalWG.Add(len(h.children))
+		for _, v := range h.children {
+			go v.locate(ctx, id, hierChan, internalWG)
+		}
+		internalWG.Wait()
 	}
-	iWG.Wait()
-
-	return
 }
 
-// LocateSubordinateTo searches for the subordinate to some superior & returns it's `HierarchyNode`.
-func (h *Node) LocateSubordinateTo(ctx context.Context, superior, subordinate string) (subordinateNode *Node, err error) {
-	var superiorNode *Node
-
-	if superior != RootID {
-		if superiorNode, err = h.Locate(ctx, superior); err != nil {
-			err = fmt.Errorf("superior (%s) %w", superior, err)
+// LocateChildTo searches for the child to some parent & returns it's `Node`.
+func (h *Node) LocateChildTo(ctx context.Context, parentID, childID string) (child *Node, err error) {
+	var parent *Node
+	if parentID != RootID {
+		if parent, err = h.Locate(ctx, parentID); err != nil {
+			err = fmt.Errorf("parent (%s) %w", parentID, err)
 			return
 		}
 	} else {
-		superiorNode = h
+		parent = h
 	}
 
-	if subordinateNode, err = superiorNode.Locate(ctx, superior); err != nil {
-		err = fmt.Errorf(notSubordinateFmt, subordinate, ErrNotSubordinate, superior)
+	if child, err = parent.Locate(ctx, parentID); err != nil {
+		err = fmt.Errorf(notChildFmt, childID, ErrNotChild, parentID)
 	}
 
 	return
 }
 
-// Serialize transforms a `HierarchyNode` into a string.
+// Serialize transforms a `Node` into a string.
 func (h *Node) Serialize(ctx context.Context) (output string, err error) {
-	var buffer strings.Builder
-
-	serChan := make(chan string)
-
-	go func() {
-		h.serialize(ctx, serChan)
-		close(serChan)
-	}()
-
-	// Handle root `HierarchyNode`.
-	fVal, fProceed := <-serChan
-	if !fProceed {
+	select {
+	case <-ctx.Done():
 		return
-	}
-	if _, err = buffer.WriteString(fVal); err != nil {
-		// Invalidate serialization output.
-		return
-	}
+	default:
+		serChan := make(chan string)
+		go func() {
+			h.serialize(ctx, serChan)
+			close(serChan)
+		}()
 
-	for {
-		val, proceed := <-serChan
-		if !proceed {
-			break
+		// Handle root `Node`.
+		fVal, fProceed := <-serChan
+		if !fProceed {
+			return
 		}
-
-		if val != string(endMarker) {
-			if _, err = buffer.WriteString(string(valueSplitter)); err != nil {
-				return
-			}
-		}
-		if _, err = buffer.WriteString(val); err != nil {
+		var buffer strings.Builder
+		if _, err = buffer.WriteString(fVal); err != nil {
 			// Invalidate serialization output.
 			return
 		}
-	}
 
-	output, err = buffer.String(), ctx.Err()
+		for {
+			val, proceed := <-serChan
+			if !proceed {
+				break
+			}
+
+			if val != string(endMarker) {
+				if _, err = buffer.WriteString(string(valueSplitter)); err != nil {
+					return
+				}
+			}
+			if _, err = buffer.WriteString(val); err != nil {
+				// Invalidate serialization output.
+				return
+			}
+		}
+
+		output = buffer.String()
+	}
 
 	return
 }
@@ -406,121 +395,124 @@ func (h *Node) serialize(ctx context.Context, serChan chan string) {
 	if h == nil || h.id == RootID {
 		return
 	}
+	serChan <- h.id
 
-	serChan <- fmt.Sprint(h.id)
-	for _, subordinate := range h.subordinates {
+	for _, child := range h.children {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			subordinate.serialize(ctx, serChan)
+			child.serialize(ctx, serChan)
 		}
 	}
 	serChan <- string(endMarker)
 }
 
-// Deserialize transforms a serialized `HierarchyNode` into a `HierarchyNode`.
+// Deserialize transforms a serialized `Node` into a `Node`.
 //
-// An invalid entry will result in a truncated `HierarchyNode`.
+// An invalid entry will result in a truncated `Node`.
 func (h *Node) Deserialize(ctx context.Context, input string) (err error) {
 	if input == "" {
 		err = ErrEmptyDeserializationSrc
 		return
 	}
 
-	l := lexer.NewLexer(lLogger, input)
-	go l.Lex(ctx)
-
-	if _, err = h.deserialize(ctx, l); err != nil {
-		err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
+	select {
+	case <-ctx.Done():
 		return
-	}
-
-	diff := l.ValueCounter - l.EndCounter
-	switch {
-	case diff > 0:
-		// Excessive values.
-		err = fmt.Errorf("the serialized `HierarchyNode` has values in excess by: %d", diff)
-	case diff < 0:
-		// Excessive end markers.
-		err = fmt.Errorf("the serialized `HierarchyNode` has end marker `%s` in excess by: %d", string(lexer.EndMarker), diff*-1)
 	default:
-		// Valid
-	}
-	if err != nil {
-		return
-	}
+		l := lexer.New(lLogger, input)
+		go l.Lex(ctx)
 
-	subs, _ := h.ListSubordinatesToWithLevel(ctx, RootID)
-	lLogger.Debugf("hierarchy: %+v", subs)
+		if _, err = h.deserialize(ctx, l); err != nil {
+			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
+			return
+		}
 
-	err = ctx.Err()
+		diff := l.ValueCounter - l.EndCounter
+		switch {
+		case diff > 0:
+			// Excessive values.
+			err = fmt.Errorf("the serialized `Node` has values in excess by: %d", diff)
+		case diff < 0:
+			// Excessive end markers.
+			err = fmt.Errorf("the serialized `Node` has end marker `%s` in excess by: %d", string(lexer.EndMarker), diff*-1)
+		default:
+			// Valid
+		}
+		if err != nil {
+			return
+		}
+
+		children, _ := h.ListChildrenOfByLevel(ctx, RootID)
+		lLogger.Debugf("hierarchy: %+v", children)
+	}
 
 	return
 }
 
 // deserialize performs the deserialization grunt work.
 func (h *Node) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, err error) {
-	item, proceed := <-l.Item
-	if !proceed {
+	select {
+	case <-ctx.Done():
 		end = true
 		return
-	}
-
-	lLogger.Debugf("lexed item: %+v", item)
-
-	switch item.ID {
-	case lexer.ItemEOF:
-		end = true
-		return
-	case lexer.ItemError:
-		// Stop input processing.
-		end = true
-		err = item.Err
-		return
-	case lexer.ItemEndMarker:
-		end = true
-		return
-	case lexer.ItemSplitter:
-		return
-	}
-
-	h = New(ctx, item.Val)
-	for {
-		select {
-		case <-ctx.Done():
+	default:
+		item, proceed := <-l.Item
+		if !proceed {
 			end = true
 			return
-		default:
-			var endSubs bool
+		}
+
+		lLogger.Debugf("lexed item: %+v", item)
+
+		switch item.ID {
+		case lexer.ItemEOF:
+			end = true
+			return
+		case lexer.ItemError:
+			// Stop input processing.
+			end = true
+			err = item.Err
+			return
+		case lexer.ItemEndMarker:
+			end = true
+			return
+		case lexer.ItemSplitter:
+			return
+		}
+
+		h = New(ctx, item.Val)
+		for {
+			var endChildren bool
 
 			// NOTE: Receivers are passed by copy & need to be initialized; a pointer to nil won't
 			// store the results.
-			sub := New(ctx, RootID)
-			if endSubs, err = sub.deserialize(ctx, l); endSubs || err != nil {
+			child := New(ctx, RootID)
+			if endChildren, err = child.deserialize(ctx, l); endChildren || err != nil {
 				// End of children.
 				return
 			}
-			sub.superior = h
+			child.parent = h
 
-			if sub.id != RootID {
-				// h.subordinates = append(h.subordinates, sub)
-				h.subordinates[sub.id] = sub
+			if child.id != RootID {
+				// h.children = append(h.children, sub)
+				h.children[child.id] = child
 			}
 		}
 	}
 }
 
-// WalkSubordinatesTo traverses a `HierarchyNode` pushing its values to a channel argument.
+// WalkChildrenOf traverses a `Node` pushing its values to a channel argument.
 //
 // Using a channel allowing for processing on a returned value as more are obtained.
-func (h *Node) WalkSubordinatesTo(ctx context.Context, superior string, hierChan chan TraverseChan) {
-	if superior == RootID {
+func (h *Node) WalkChildrenOf(ctx context.Context, parentID string, hierChan chan TraverseChan) {
+	if parentID == RootID {
 		h.Walk(ctx, hierChan)
 		return
 	}
 
-	if node, err := h.Locate(ctx, superior); err == nil {
+	if node, err := h.Locate(ctx, parentID); err == nil {
 		node.Walk(ctx, hierChan)
 		return
 	}
@@ -528,7 +520,7 @@ func (h *Node) WalkSubordinatesTo(ctx context.Context, superior string, hierChan
 	close(hierChan)
 }
 
-// Walk performs level-order traversal on a `HierarchyNode`, pushing its values to its channel
+// Walk performs level-order traversal on a `Node`, pushing its values to its channel
 // argument.
 //
 // This operation uses channels to minimize resource wastage.
@@ -572,12 +564,12 @@ func (h *Node) Walk(ctx context.Context, hierChan chan TraverseChan) {
 				newPeers = false
 
 				// Add children to the queue.
-				if front.subordinates != nil {
-					if front.subordinates == nil {
+				if front.children != nil {
+					if front.children == nil {
 						continue
 					}
 
-					for _, v := range front.subordinates {
+					for _, v := range front.children {
 						queue = append(queue, v)
 					}
 				}
