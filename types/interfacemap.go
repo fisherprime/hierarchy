@@ -20,17 +20,13 @@ const (
 	ReadErrFmt = "failed to read (%s): %w"
 )
 
-// Claims errors.
 var (
-	ErrMissingClaims = errors.New("claims missing from the context")
-	ErrInvalidType   = errors.New("invalid data type")
+	lLogger *logrus.Logger
 )
 
+// Claims errors.
 var (
-	// ReadClaimsErrFmt defines the format for the `ErrMissingClaims` message.
-	ReadClaimsErrFmt = "failed to read claims (%s): %w"
-
-	lLogger *logrus.Logger
+	ErrInvalidType = errors.New("invalid data type")
 )
 
 func init() {
@@ -42,21 +38,10 @@ func SetLogger(l *logrus.Logger) { lLogger = l }
 // Add value to `InterfaceMap`.
 func (a *InterfaceMap) Add(key string, val interface{}) { (*a)[key] = val }
 
-// GetInterface from `InterfaceMap`.
-func (a *InterfaceMap) GetInterface(key string) (out interface{}, ok bool) {
-	if out = (*a)[key]; out != nil {
-		ok = true
-	}
-
-	return
-}
-
 // Delete from `InterfaceMap`.
 func (a *InterfaceMap) Delete(key string) { delete((*a), key) }
 
 // Get value from `InterfaceMap`.
-//
-// Implements the `authboss.ClientState` interface.
 func (a *InterfaceMap) Get(key string) (out string, ok bool) {
 	var val interface{}
 	if val, ok = (*a)[key]; ok {
@@ -66,65 +51,86 @@ func (a *InterfaceMap) Get(key string) (out string, ok bool) {
 	return
 }
 
-// GetValString …
-func (a *InterfaceMap) GetValString(key string) (strVal string, err error) {
-	if val, ok := (*a)[key]; ok {
-		if strVal, ok = val.(string); !ok {
-			err = fmt.Errorf(ReadErrFmt, key, ErrInvalidType)
-		}
+// LoadInterface from `InterfaceMap`.
+func (a *InterfaceMap) LoadInterface(key string) (out interface{}, ok bool) {
+	if out = (*a)[key]; out != nil {
+		ok = true
 	}
 
 	return
 }
 
-// GetValInt …
-func (a *InterfaceMap) GetValInt(key string) (intVal int, err error) {
-	if val, ok := (*a)[key]; ok {
-		var id float64
-		if id, ok = val.(float64); !ok {
+// LoadString …
+func (a *InterfaceMap) LoadString(key string) (result string, ok bool, err error) {
+	var val interface{}
+	if val, ok = (*a)[key]; !ok {
+		return
+	}
+
+	if result, ok = val.(string); !ok {
+		err = fmt.Errorf(ReadErrFmt, key, ErrInvalidType)
+	}
+
+	return
+}
+
+// LoadInt …
+func (a *InterfaceMap) LoadInt(key string) (result int, ok bool, err error) {
+	var val interface{}
+	if val, ok = (*a)[key]; !ok {
+		return
+	}
+
+	var id float64
+	if id, ok = val.(float64); !ok {
+		err = fmt.Errorf(ReadErrFmt, key, ErrInvalidType)
+		return
+	}
+	result = int(id)
+
+	return
+}
+
+// LoadUint …
+func (a *InterfaceMap) LoadUint(key string) (result uint, ok bool, err error) {
+	var val interface{}
+	if val, ok = (*a)[key]; !ok {
+		return
+	}
+
+	// Handle frontend requests.
+	var id float64
+	if id, ok = val.(float64); !ok {
+		// Handle authorization claims.
+		if result, ok = val.(uint); !ok {
 			err = fmt.Errorf(ReadErrFmt, key, ErrInvalidType)
 			return
 		}
-		intVal = int(id)
+		return
+	}
+	result = uint(id)
+
+	return
+}
+
+// LoadBool …
+func (a *InterfaceMap) LoadBool(key string) (result bool, ok bool, err error) {
+	var val interface{}
+	if val, ok = (*a)[key]; !ok {
+		return
+	}
+
+	if result, ok = val.(bool); !ok {
+		err = fmt.Errorf(ReadErrFmt, key, ErrInvalidType)
 	}
 
 	return
 }
 
-// GetValUint …
-func (a *InterfaceMap) GetValUint(key string) (uintVal uint, err error) {
-	if val, ok := (*a)[key]; ok {
-		// Handle frontend requests.
-		var id float64
-		if id, ok = val.(float64); !ok {
-			// Handle authorization claims.
-			if uintVal, ok = val.(uint); !ok {
-				err = fmt.Errorf(ReadErrFmt, key, ErrInvalidType)
-				return
-			}
-			return
-		}
-		uintVal = uint(id)
-	}
-
-	return
-}
-
-// GetValBool …
-func (a *InterfaceMap) GetValBool(key string) (boolVal bool, err error) {
-	if val, ok := (*a)[key]; ok {
-		if boolVal, ok = val.(bool); !ok {
-			err = fmt.Errorf(ReadErrFmt, key, ErrInvalidType)
-		}
-	}
-
-	return
-}
-
-// GetStringSlice obtains an `[]interface{}` from `AuthClaims`.
-func (a *InterfaceMap) GetStringSlice(fieldName string) (result StringSlice, err error) {
-	val, ok := (*a)[fieldName]
-	if !ok || val == nil {
+// LoadStringSlice obtains an `[]interface{}` from `AuthClaims`.
+func (a *InterfaceMap) LoadStringSlice(fieldName string) (result StringSlice, ok bool, err error) {
+	var val interface{}
+	if val, ok = (*a)[fieldName]; !ok {
 		return
 	}
 
@@ -147,10 +153,10 @@ func (a *InterfaceMap) GetStringSlice(fieldName string) (result StringSlice, err
 	return
 }
 
-// GetUintSlice obtains a `[]uint` from `AuthClaims`.
-func (a *InterfaceMap) GetUintSlice(fieldName string) (result UintSlice, err error) {
-	val, ok := (*a)[fieldName]
-	if !ok || val == nil {
+// LoadUintSlice obtains a `[]uint` from `AuthClaims`.
+func (a *InterfaceMap) LoadUintSlice(fieldName string) (result UintSlice, ok bool, err error) {
+	var val interface{}
+	if val, ok = (*a)[fieldName]; !ok {
 		return
 	}
 
