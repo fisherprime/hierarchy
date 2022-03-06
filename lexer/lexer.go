@@ -35,15 +35,15 @@ type (
 
 	// Lexer defines a type to capture identifiers from a string.
 	Lexer struct {
+		logger logrus.FieldLogger
+
+		C chan Item // channel for scanned Items
+
 		Source      io.RuneReader // input source
 		SourceIndex int           // start position of this item's rune
 
 		Buffer      []rune // slice of runes being lexed
 		BufferIndex int    // current buffer position
-
-		Item chan Item // channel for scanned Items
-
-		*logrus.Logger
 
 		ValueCounter int
 		EndCounter   int
@@ -72,11 +72,11 @@ const (
 )
 
 // New creates a new scanner for the input string
-func New(logger *logrus.Logger, source string) *Lexer {
+func New(logger logrus.FieldLogger, source string) *Lexer {
 	return &Lexer{
 		Buffer: make([]rune, 0, 10),
-		Item:   make(chan Item),
-		Logger: logger,
+		C:      make(chan Item),
+		logger: logger,
 		Source: strings.NewReader(source),
 	}
 }
@@ -88,7 +88,7 @@ func (l *Lexer) Lex(ctx context.Context) {
 	}
 
 	// Close channel
-	close(l.Item)
+	close(l.C)
 }
 
 // LexWhitespace search for whitespace.
@@ -103,7 +103,7 @@ func (l *Lexer) LexWhitespace(ctx context.Context) NextOperation {
 		}
 
 		next, err := l.Peek()
-		l.Logger.Debug("next token: ", string(next), "\ncurrent token: ",
+		l.logger.Debug("next token: ", string(next), "\ncurrent token: ",
 			string(l.Buffer[l.BufferIndex]), "\nerr: ", err)
 		if err != nil {
 			return l.LogError(err)
@@ -287,8 +287,8 @@ func (l *Lexer) AcceptWhile(fn ValidationFunction) (err error) {
 
 // Emit send an Item specification to the LexType.
 func (l *Lexer) Emit(t ItemID) {
-	l.Logger.Debug("Lexer buffer content: ", string(l.Buffer[:l.BufferIndex]))
-	l.Item <- Item{
+	l.logger.Debug("Lexer buffer content: ", string(l.Buffer[:l.BufferIndex]))
+	l.C <- Item{
 		ID:  t,
 		Pos: l.SourceIndex,
 		Val: string(l.Buffer[:l.BufferIndex]),
@@ -298,7 +298,7 @@ func (l *Lexer) Emit(t ItemID) {
 
 // LogError set the item to the error token that'll terminate the scan process (nextItem).
 func (l *Lexer) LogError(err error) NextOperation {
-	l.Item <- Item{
+	l.C <- Item{
 		ID:  ItemError,
 		Pos: l.SourceIndex,
 		Err: err,
@@ -307,7 +307,7 @@ func (l *Lexer) LogError(err error) NextOperation {
 }
 
 // NextItem return the next Item from the input.
-func (l *Lexer) NextItem() Item { return <-l.Item }
+func (l *Lexer) NextItem() Item { return <-l.C }
 
 // isSpace return true for whitespace, newline & carrier return.
 func isWhitespace(r rune) bool { return isSpace(r) || r == '\r' || r == '\n' }

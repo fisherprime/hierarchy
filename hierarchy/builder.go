@@ -60,7 +60,7 @@ func FromBuilder(ctx context.Context, src []Builder) (h *Node, err error) {
 		}
 
 		if err != nil {
-			lLogger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(src))
+			fLogger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(src))
 			err = fmt.Errorf("%v: %w", ErrInvalidHierarchySrc, err)
 		}
 	}()
@@ -141,8 +141,9 @@ func FromBuilder(ctx context.Context, src []Builder) (h *Node, err error) {
 
 				src = popHierarchyBuilder(src, index)
 
-				// NOTE: This works around improperly ordered record identifiers; id `1` is a child of
-				// id `5`.
+				// NOTE: This works around improperly ordered record identifiers; id `1` is a child
+				// of id `5`.
+				//
 				// Adds extraneous opcodes.
 				break
 

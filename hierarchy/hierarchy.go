@@ -10,7 +10,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"gitlab.com/fisherprime/hierarchy/lexer"
-	"gitlab.com/fisherprime/hierarchy/types"
 )
 
 // REF: https://www.geeksforgeeks.org/generic-tree-level-order-traversal
@@ -58,10 +57,10 @@ var (
 )
 
 var (
-	lLogger = logrus.New()
+	fLogger logrus.FieldLogger = logrus.NewEntry(logrus.New())
 )
 
-func SetLogger(l *logrus.Logger) { lLogger = l }
+func SetLogger(l logrus.FieldLogger) { fLogger = l }
 
 // New initiates a `Node`.
 func New(_ context.Context, init string) *Node {
@@ -120,11 +119,11 @@ func (h *Node) HasChild(_ context.Context, childID string) (index int) {
 	return
 }
 
-// ListImmediateSubordinates lists the immediate children for a `Node`.
-func (h *Node) ListImmediateChildren(ctx context.Context) (children *types.StringSlice) {
-	*children = make(types.StringSlice, 0)
+// ListImmediateChildren lists the immediate children for a `Node`.
+func (h *Node) ListImmediateChildren(ctx context.Context) (children []string) {
+	children = make([]string, 0)
 	for _, child := range h.children {
-		*children = append(*children, child.id)
+		children = append(children, child.id)
 	}
 
 	return
@@ -134,8 +133,8 @@ func (h *Node) ListImmediateChildren(ctx context.Context) (children *types.Strin
 // model.
 //
 // NOTE: This operation is expensive.
-func (h *Node) ListChildrenOf(ctx context.Context, parentID string) (children *types.StringSlice, err error) {
-	children = new(types.StringSlice)
+func (h *Node) ListChildrenOf(ctx context.Context, parentID string) (children []string, err error) {
+	children = make([]string, 0)
 	hierChan := make(chan TraverseChan, traverseBufferSize)
 
 	go h.WalkChildrenOf(ctx, parentID, hierChan)
@@ -150,20 +149,20 @@ func (h *Node) ListChildrenOf(ctx context.Context, parentID string) (children *t
 			return
 		}
 
-		*children = append(*children, resl.node.id)
+		children = append(children, resl.node.id)
 	}
 
-	lLogger.Debugf("`Node` walk: %+v", *children)
+	fLogger.Debugf("`Node` walk: %+v", children)
 
-	numChildren := len(*children)
+	numChildren := len(children)
 	if numChildren > 0 {
 		// Omit self from the list.
-		*children = (*children)[1:]
+		children = (children)[1:]
 
-		lLogger.Debugf("children: %+v", *children)
+		fLogger.Debugf("children: %+v", children)
 	}
 
-	if len(*children) < 1 {
+	if len(children) < 1 {
 		err = ErrNoChildren
 	}
 
@@ -174,8 +173,8 @@ func (h *Node) ListChildrenOf(ctx context.Context, parentID string) (children *t
 // `Node` for some parent model.
 //
 // NOTE: This operation will bottleneck list generation operations.
-func (h *Node) ListChildrenOfByLevel(ctx context.Context, parentID string) (children *[]types.StringSlice, err error) {
-	children = &[]types.StringSlice{}
+func (h *Node) ListChildrenOfByLevel(ctx context.Context, parentID string) (children [][]string, err error) {
+	children = make([][]string, 0)
 	hierChan := make(chan TraverseChan, traverseBufferSize)
 
 	go h.WalkChildrenOf(ctx, parentID, hierChan)
@@ -193,36 +192,36 @@ func (h *Node) ListChildrenOfByLevel(ctx context.Context, parentID string) (chil
 
 		if resl.newPeers {
 			if len(peers) > 0 {
-				*children = append(*children, peers)
+				children = append(children, peers)
 			}
 			peers = make([]string, initialQueueLen)
 		}
 		peers = append(peers, resl.node.id)
 	}
 	if len(peers) > 0 {
-		*children = append(*children, peers)
+		children = append(children, peers)
 	}
 
-	lLogger.Debugf("`Node` walk: %+v", *children)
+	fLogger.Debugf("`Node` walk: %+v", children)
 
-	numChildren := len(*children)
+	numChildren := len(children)
 	if numChildren > 0 {
 		// Omit self from the list.
-		*children = (*children)[1:]
+		children = (children)[1:]
 
-		lLogger.Debugf("children: %+v", *children)
+		fLogger.Debugf("children: %+v", children)
 	}
 
-	if len(*children) < 1 {
+	if len(children) < 1 {
 		err = ErrNoChildren
 	}
 
 	return
 }
 
-// ListTerminalNodes returns an array of terminal node data as defined in `Node`.
-func (h *Node) ListTerminalNodes(ctx context.Context) (termItems *types.StringSlice, err error) {
-	termItems = new(types.StringSlice)
+// ListLeaves returns an array of leaves (terminal node) data as defined in `Node`.
+func (h *Node) ListLeaves(ctx context.Context) (termItems []string, err error) {
+	termItems = make([]string, 0)
 	hierChan := make(chan TraverseChan, traverseBufferSize)
 
 	go h.Walk(ctx, hierChan)
@@ -238,11 +237,11 @@ func (h *Node) ListTerminalNodes(ctx context.Context) (termItems *types.StringSl
 		}
 
 		if resl.node.children == nil || len(resl.node.children) < 1 {
-			*termItems = append(*termItems, resl.node.id)
+			termItems = append(termItems, resl.node.id)
 		}
 	}
 
-	if len(*termItems) < 1 {
+	if len(termItems) < 1 {
 		err = ErrNoTerminalNodes
 	}
 
@@ -421,7 +420,7 @@ func (h *Node) Deserialize(ctx context.Context, input string) (err error) {
 	case <-ctx.Done():
 		return
 	default:
-		l := lexer.New(lLogger, input)
+		l := lexer.New(fLogger, input)
 		go l.Lex(ctx)
 
 		if _, err = h.deserialize(ctx, l); err != nil {
@@ -445,7 +444,7 @@ func (h *Node) Deserialize(ctx context.Context, input string) (err error) {
 		}
 
 		children, _ := h.ListChildrenOfByLevel(ctx, RootID)
-		lLogger.Debugf("hierarchy: %+v", children)
+		fLogger.Debugf("hierarchy: %+v", children)
 	}
 
 	return
@@ -458,13 +457,13 @@ func (h *Node) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, err e
 		end = true
 		return
 	default:
-		item, proceed := <-l.Item
+		item, proceed := <-l.C
 		if !proceed {
 			end = true
 			return
 		}
 
-		lLogger.Debugf("lexed item: %+v", item)
+		fLogger.Debugf("lexed item: %+v", item)
 
 		switch item.ID {
 		case lexer.ItemEOF:
