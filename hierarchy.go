@@ -5,11 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
-	"gitlab.com/fisherprime/hierarchy/lexer"
 )
 
 // REF: https://www.geeksforgeeks.org/generic-tree-level-order-traversal
@@ -19,8 +17,7 @@ import (
 // `rune`s are singe `UTF-8` codepoints, not used as the hierarchy expects strings.
 
 type (
-	// TraverseChan defines a channel to communicate info between `Node`
-	// operations & it's callers.
+	// TraverseChan defines a channel to communicate info between `Node` operations & it's callers.
 	TraverseChan struct {
 		newPeers bool
 		node     *Node
@@ -29,11 +26,10 @@ type (
 )
 
 const (
-	// RootID is the identifier defaulted as a root node.
-	RootID = "0"
+	// DefaultRootValue is default root node value.
+	DefaultRootValue = ""
 
-	initialQueueLen = 0
-
+	initialQueueLen    = 0
 	traverseBufferSize = 10
 
 	// endMarker a `rune` indicating the end of a node's children.
@@ -45,15 +41,14 @@ const (
 	notChildFmt = "(%s) %w (%s)"
 )
 
-// Errors codes encountered when handling a `Node`.
+// Errors encountered when handling a `Node`.
 var (
-	ErrAlreadyChild            = errors.New("is a child of")
-	ErrEmptyDeserializationSrc = errors.New("empty Node deserialization source")
-	ErrIDNotFound              = errors.New("not found")
-	ErrNoChildren              = errors.New("lacks children ")
-	ErrNoParents               = errors.New("lacks parents")
-	ErrNoTerminalNodes         = errors.New("lacks terminal nodes; tree is cyclic")
-	ErrNotChild                = errors.New("is not a child of")
+	ErrNotFound = errors.New("not found")
+
+	ErrNoLeaves     = errors.New("lacks leaves; tree is cyclic")
+	ErrAlreadyChild = errors.New("is a child of")
+	ErrNoChildren   = errors.New("lacks children ")
+	ErrNotChild     = errors.New("is not a child of")
 )
 
 var (
@@ -62,24 +57,20 @@ var (
 
 func SetLogger(l logrus.FieldLogger) { fLogger = l }
 
-// New initiates a `Node`.
-func New(_ context.Context, init string) *Node {
-	return &Node{
-		id:       init,
-		children: make(childMap),
-	}
-}
-
 // AddChild to a `Node`.
 func (h *Node) AddChild(ctx context.Context, child *Node) (err error) {
-	// Search for existing immediate child.
-	if h.HasChild(ctx, child.id) > 0 {
-		err = fmt.Errorf("(%s) %w (%s)", child.id, ErrAlreadyChild, h.id)
-		return
+	if h.children != nil {
+		// Search for existing immediate child.
+		if h.HasChild(ctx, child.value) > 0 {
+			err = fmt.Errorf("(%s) %w (%s)", child.value, ErrAlreadyChild, h.value)
+			return
+		}
+	} else {
+		h.children = make(childMap)
 	}
 
 	child.parent = h
-	h.children[child.id] = child
+	h.children[child.value] = child
 
 	return
 }
@@ -99,7 +90,7 @@ func (h *Node) AddChildTo(ctx context.Context, parentID string, child *Node) (er
 func (h *Node) PopChild(ctx context.Context, childID string) (child *Node, err error) {
 	var index int
 	if index = h.HasChild(ctx, childID); index < 0 {
-		err = fmt.Errorf("child (%s) of (%s): %s", childID, h.id, ErrIDNotFound)
+		err = fmt.Errorf("child (%s) of (%s): %s", childID, h.value, ErrNotFound)
 		return
 	}
 
@@ -123,7 +114,7 @@ func (h *Node) HasChild(_ context.Context, childID string) (index int) {
 func (h *Node) ListImmediateChildren(ctx context.Context) (children []string) {
 	children = make([]string, 0)
 	for _, child := range h.children {
-		children = append(children, child.id)
+		children = append(children, child.value)
 	}
 
 	return
@@ -149,7 +140,7 @@ func (h *Node) ListChildrenOf(ctx context.Context, parentID string) (children []
 			return
 		}
 
-		children = append(children, resl.node.id)
+		children = append(children, resl.node.value)
 	}
 
 	fLogger.Debugf("`Node` walk: %+v", children)
@@ -196,7 +187,7 @@ func (h *Node) ListChildrenOfByLevel(ctx context.Context, parentID string) (chil
 			}
 			peers = make([]string, initialQueueLen)
 		}
-		peers = append(peers, resl.node.id)
+		peers = append(peers, resl.node.value)
 	}
 	if len(peers) > 0 {
 		children = append(children, peers)
@@ -237,12 +228,12 @@ func (h *Node) ListLeaves(ctx context.Context) (termItems []string, err error) {
 		}
 
 		if resl.node.children == nil || len(resl.node.children) < 1 {
-			termItems = append(termItems, resl.node.id)
+			termItems = append(termItems, resl.node.value)
 		}
 	}
 
 	if len(termItems) < 1 {
-		err = ErrNoTerminalNodes
+		err = ErrNoLeaves
 	}
 
 	return
@@ -279,7 +270,7 @@ func (h *Node) Locate(ctx context.Context, id string) (node *Node, err error) {
 
 		resl, proceed := <-hierChan
 		if !proceed {
-			err = ErrIDNotFound
+			err = ErrNotFound
 			return
 		}
 
@@ -287,7 +278,7 @@ func (h *Node) Locate(ctx context.Context, id string) (node *Node, err error) {
 			return
 		}
 
-		err = ErrIDNotFound
+		err = ErrNotFound
 	}
 
 	return
@@ -301,7 +292,7 @@ func (h *Node) locate(ctx context.Context, id string, hierChan chan TraverseChan
 	case <-ctx.Done():
 		return
 	default:
-		if h.id == id {
+		if h.value == id {
 			hierChan <- TraverseChan{node: h}
 			return
 		}
@@ -327,7 +318,7 @@ func (h *Node) locate(ctx context.Context, id string, hierChan chan TraverseChan
 // LocateChildTo searches for the child to some parent & returns it's `Node`.
 func (h *Node) LocateChildTo(ctx context.Context, parentID, childID string) (child *Node, err error) {
 	var parent *Node
-	if parentID != RootID {
+	if parentID != h.rootValue {
 		if parent, err = h.Locate(ctx, parentID); err != nil {
 			err = fmt.Errorf("parent (%s) %w", parentID, err)
 			return
@@ -343,170 +334,11 @@ func (h *Node) LocateChildTo(ctx context.Context, parentID, childID string) (chi
 	return
 }
 
-// Serialize transforms a `Node` into a string.
-func (h *Node) Serialize(ctx context.Context) (output string, err error) {
-	select {
-	case <-ctx.Done():
-		return
-	default:
-		serChan := make(chan string)
-		go func() {
-			h.serialize(ctx, serChan)
-			close(serChan)
-		}()
-
-		// Handle root `Node`.
-		fVal, fProceed := <-serChan
-		if !fProceed {
-			return
-		}
-		var buffer strings.Builder
-		if _, err = buffer.WriteString(fVal); err != nil {
-			// Invalidate serialization output.
-			return
-		}
-
-		for {
-			val, proceed := <-serChan
-			if !proceed {
-				break
-			}
-
-			if val != string(endMarker) {
-				if _, err = buffer.WriteString(string(valueSplitter)); err != nil {
-					return
-				}
-			}
-			if _, err = buffer.WriteString(val); err != nil {
-				// Invalidate serialization output.
-				return
-			}
-		}
-
-		output = buffer.String()
-	}
-
-	return
-}
-
-// serialize performs the serialization grunt work.
-func (h *Node) serialize(ctx context.Context, serChan chan string) {
-	if h == nil || h.id == RootID {
-		return
-	}
-	serChan <- h.id
-
-	for _, child := range h.children {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			child.serialize(ctx, serChan)
-		}
-	}
-	serChan <- string(endMarker)
-}
-
-// Deserialize transforms a serialized `Node` into a `Node`.
-//
-// An invalid entry will result in a truncated `Node`.
-func (h *Node) Deserialize(ctx context.Context, input string) (err error) {
-	if input == "" {
-		err = ErrEmptyDeserializationSrc
-		return
-	}
-
-	select {
-	case <-ctx.Done():
-		return
-	default:
-		l := lexer.New(fLogger, input)
-		go l.Lex(ctx)
-
-		if _, err = h.deserialize(ctx, l); err != nil {
-			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
-			return
-		}
-
-		diff := l.ValueCounter - l.EndCounter
-		switch {
-		case diff > 0:
-			// Excessive values.
-			err = fmt.Errorf("the serialized `Node` has values in excess by: %d", diff)
-		case diff < 0:
-			// Excessive end markers.
-			err = fmt.Errorf("the serialized `Node` has end marker `%s` in excess by: %d", string(lexer.EndMarker), diff*-1)
-		default:
-			// Valid
-		}
-		if err != nil {
-			return
-		}
-
-		children, _ := h.ListChildrenOfByLevel(ctx, RootID)
-		fLogger.Debugf("hierarchy: %+v", children)
-	}
-
-	return
-}
-
-// deserialize performs the deserialization grunt work.
-func (h *Node) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, err error) {
-	select {
-	case <-ctx.Done():
-		end = true
-		return
-	default:
-		item, proceed := <-l.C
-		if !proceed {
-			end = true
-			return
-		}
-
-		fLogger.Debugf("lexed item: %+v", item)
-
-		switch item.ID {
-		case lexer.ItemEOF:
-			end = true
-			return
-		case lexer.ItemError:
-			// Stop input processing.
-			end = true
-			err = item.Err
-			return
-		case lexer.ItemEndMarker:
-			end = true
-			return
-		case lexer.ItemSplitter:
-			return
-		}
-
-		h = New(ctx, item.Val)
-		for {
-			var endChildren bool
-
-			// NOTE: Receivers are passed by copy & need to be initialized; a pointer to nil won't
-			// store the results.
-			child := New(ctx, RootID)
-			if endChildren, err = child.deserialize(ctx, l); endChildren || err != nil {
-				// End of children.
-				return
-			}
-			child.parent = h
-
-			if child.id != RootID {
-				// h.children = append(h.children, sub)
-				h.children[child.id] = child
-			}
-		}
-	}
-}
-
 // WalkChildrenOf traverses a `Node` pushing its values to a channel argument.
 //
 // Using a channel allowing for processing on a returned value as more are obtained.
 func (h *Node) WalkChildrenOf(ctx context.Context, parentID string, hierChan chan TraverseChan) {
-	if parentID == RootID {
+	if parentID == h.rootValue {
 		h.Walk(ctx, hierChan)
 		return
 	}
