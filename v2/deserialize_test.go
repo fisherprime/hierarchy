@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
 	"gitlab.com/fisherprime/hierarchy/lexer/v2"
 )
 
 func TestDeserialize(t *testing.T) {
 	type args struct {
-		ctx  context.Context
-		opts []lexer.Option
+		ctx context.Context
+		cfg []lexer.Option
 	}
 
 	logger := logrus.New()
@@ -37,10 +38,11 @@ func TestDeserialize(t *testing.T) {
 				children: children[int]{3: &Hierarchy[int]{
 					value: 3, children: children[int]{},
 				}},
-				opts: DefOpts(),
+				cfg: DefOpts(),
 			},
 			// wantErr: true,
-		}, {
+		},
+		{
 			name: "valid (excessive whitespace)",
 			args: args{
 				context.Background(),
@@ -51,7 +53,7 @@ func TestDeserialize(t *testing.T) {
 				children: children[int]{3: &Hierarchy[int]{
 					value: 3, children: children[int]{},
 				}},
-				opts: DefOpts(),
+				cfg: DefOpts(),
 			},
 			// wantErr: true,
 		},
@@ -71,7 +73,7 @@ func TestDeserialize(t *testing.T) {
 						value: 4, children: children[int]{},
 					},
 				},
-				opts: DefOpts(),
+				cfg: DefOpts(),
 			},
 			wantErr: true,
 		},
@@ -79,7 +81,7 @@ func TestDeserialize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotH, err := Deserialize[int](tt.args.ctx, tt.args.opts...)
+			gotH, err := Deserialize[int](tt.args.ctx, tt.args.cfg...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deserialize() error = %v, wantErr %v", err, tt.wantErr)
 				return

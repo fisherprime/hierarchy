@@ -11,16 +11,16 @@ import (
 )
 
 // Serialize transforms a Hierarchy into a string.
-func (h *Hierarchy[T]) Serialize(ctx context.Context, opts lexer.Opts) (output string, err error) {
+func (h *Hierarchy[T]) Serialize(ctx context.Context, cfg *lexer.Config) (output string, err error) {
 	select {
 	case <-ctx.Done():
 		return
 	default:
-		(&opts).Validate()
+		cfg.Validate()
 
 		serChan := make(chan string)
 		go func() {
-			h.serialize(ctx, opts, serChan)
+			h.serialize(ctx, cfg, serChan)
 			close(serChan)
 		}()
 
@@ -41,8 +41,8 @@ func (h *Hierarchy[T]) Serialize(ctx context.Context, opts lexer.Opts) (output s
 				break
 			}
 
-			if val != string(opts.EndMarker) {
-				if _, err = buffer.WriteString(string(opts.Splitter)); err != nil {
+			if val != string(cfg.EndMarker) {
+				if _, err = buffer.WriteString(string(cfg.Splitter)); err != nil {
 					return
 				}
 			}
@@ -59,7 +59,7 @@ func (h *Hierarchy[T]) Serialize(ctx context.Context, opts lexer.Opts) (output s
 }
 
 // serialize performs the serialization grunt work.
-func (h *Hierarchy[T]) serialize(ctx context.Context, opts lexer.Opts, serChan chan string) {
+func (h *Hierarchy[T]) serialize(ctx context.Context, cfg *lexer.Config, serChan chan string) {
 	var rootValue T
 	if h == nil || h.value == rootValue {
 		return
@@ -83,8 +83,8 @@ func (h *Hierarchy[T]) serialize(ctx context.Context, opts lexer.Opts, serChan c
 		case <-ctx.Done():
 			return
 		default:
-			child.serialize(ctx, opts, serChan)
+			child.serialize(ctx, cfg, serChan)
 		}
 	}
-	serChan <- string(opts.EndMarker)
+	serChan <- string(cfg.EndMarker)
 }

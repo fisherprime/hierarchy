@@ -21,11 +21,16 @@ type (
 
 	// BuildSource is a wrapper type for []Builder used to generate the Hierarchy.
 	BuildSource[T Constraint] struct {
-		debug  bool
-		logger logrus.FieldLogger
+		cfg Config
 
-		list      []Builder[T]
+		builders  []Builder[T]
 		isOrdered bool
+	}
+
+	// Config defines configuration options for the [BuildSource] & [Hierarchy]'s operations.
+	Config struct {
+		Logger logrus.FieldLogger
+		Debug  bool
 	}
 
 	// DefaultBuilder is a sample Builder interface implementation.
@@ -62,7 +67,7 @@ func (d *DefaultBuilder) Parent() string { return d.parent }
 
 // NewBuildSource instantiates a BuildSource.
 func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
-	b := &BuildSource[T]{list: []Builder[T]{}}
+	b := &BuildSource[T]{builders: []Builder[T]{}}
 
 	for _, opt := range options {
 		opt(b)
@@ -71,39 +76,43 @@ func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
 	return b
 }
 
+// WithConfig configures the [BuildSource]'s [Config].
+func WithConfig[T Constraint](cfg *Config) BuildOption[T] {
+	return func(b *BuildSource[T]) { b.cfg = *cfg }
+}
+
 // WithBuilders configures the underlying list.
-func WithBuilders[T Constraint](list []Builder[T]) BuildOption[T] {
-	return func(b *BuildSource[T]) { b.list = list }
+func WithBuilders[T Constraint](builders []Builder[T]) BuildOption[T] {
+	return func(b *BuildSource[T]) { b.builders = builders }
 }
 
 // WithBuildLogger configures the logger option.
 func WithBuildLogger[T Constraint](logger logrus.FieldLogger) BuildOption[T] {
-	return func(b *BuildSource[T]) { b.logger = logger }
-
+	return func(b *BuildSource[T]) { b.cfg.Logger = logger }
 }
 
 // WithDebug configures the debug option
 func WithDebug[T Constraint](debug bool) BuildOption[T] {
-	return func(b *BuildSource[T]) { b.debug = debug }
+	return func(b *BuildSource[T]) { b.cfg.Debug = debug }
 }
 
 // Len retrieves the length of the BuildSource.
-func (b *BuildSource[T]) Len() int { return len(b.list) }
+func (b *BuildSource[T]) Len() int { return len(b.builders) }
 
 // Cut a value at some index from the BuildSource.
 func (b *BuildSource[T]) Cut(index int) {
 	if index == 0 {
-		b.list = b.list[1:]
+		b.builders = b.builders[1:]
 		return
 	}
 
 	upper := index + 1
 	// Cut upto (excluding) `index`, cut from (including) `index+1`.
-	b.list = append(b.list[:index], b.list[upper:]...)
+	b.builders = append(b.builders[:index], b.builders[upper:]...)
 }
 
 // Build generates a hierarchy from a Source.
-func (b *BuildSource[T]) Build(ctx context.Context, opts ...Opts) (h *Hierarchy[T], err error) {
+func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("%w: %v", ErrBuildHierarchy, err)
@@ -116,11 +125,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, opts ...Opts) (h *Hierarchy[
 		}
 
 		if err != nil {
-			// Skip expensive operation if not debug.
-			if b.debug {
-				b.logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
-			}
-
+			b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
 			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
 		}
 	}()
@@ -139,8 +144,8 @@ func (b *BuildSource[T]) Build(ctx context.Context, opts ...Opts) (h *Hierarchy[
 		return
 	default:
 		rootIndex := 0
-		for index := range b.list {
-			if b.list[index].Parent() != rootValue {
+		for index := range b.builders {
+			if b.builders[index].Parent() != rootValue {
 				continue
 			}
 
@@ -149,7 +154,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, opts ...Opts) (h *Hierarchy[
 				err = ErrMultipleRootNodes
 				return
 			}
-			id := b.list[index].Value()
+			id := b.builders[index].Value()
 			h, cache[id] = New(id), struct{}{}
 
 			rootIndex = index
@@ -161,13 +166,9 @@ func (b *BuildSource[T]) Build(ctx context.Context, opts ...Opts) (h *Hierarchy[
 
 		// Remove the root node from the build source..
 		prevLen := b.Len()
-		if b.debug {
-			b.logger.Debugf("source: %+v\n", *b)
-		}
+		b.cfg.Logger.Debugf("source: %+v\n", *b)
 		b.Cut(rootIndex)
-		if b.debug {
-			b.logger.Debugf("source (without root): %+v\n", *b)
-		}
+		b.cfg.Logger.Debugf("source (without root): %+v\n", *b)
 
 		for {
 			lenSrc := b.Len()
@@ -182,7 +183,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, opts ...Opts) (h *Hierarchy[
 			prevLen = lenSrc
 
 			for index := 0; index < lenSrc; index++ {
-				node := b.list[index]
+				node := b.builders[index]
 				parentID := node.Parent()
 
 				// Parent not in hierarchy.

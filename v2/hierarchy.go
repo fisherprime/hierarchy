@@ -28,17 +28,17 @@ type (
 	//
 	// Synchronization is unnecessary, the type is designed for single write multiple read.
 	Hierarchy[T Constraint] struct {
-		// value contains the node's data.
-		value T
+		// cfg contains a pointer to options shared by all Hierarchy nodes.
+		cfg *Config
 
 		// parent contains a reference to the upper Hierarchy.
 		parent *Hierarchy[T]
 
+		// value contains the node's data.
+		value T
+
 		// children holds references to nodes at a lower level.
 		children children[T]
-
-		// opts contains a pointer to options shared by all Hierarchy nodes.
-		opts *Opts
 	}
 
 	// List is a type wrapper for []*Hierarchy.
@@ -48,15 +48,9 @@ type (
 
 	// TraverseComm defines a channel to communicate info between Hierarchy operations & it's callers.
 	TraverseComm[T Constraint] struct {
-		newPeers bool
 		node     *Hierarchy[T]
 		err      error
-	}
-
-	// Opts defines options for the Hierarchy's operations.
-	Opts struct {
-		Debug  bool
-		Logger logrus.FieldLogger
+		newPeers bool
 	}
 
 	// Option defines the Hierarchy functional option type.
@@ -81,11 +75,11 @@ var (
 
 var (
 	defLogger = logrus.New()
-	defOpts   = Opts{Logger: defLogger}
+	defOpts   = Config{Logger: defLogger}
 )
 
 // DefOpts obtains the package's  Hierarchy default options.
-func DefOpts() *Opts { return &defOpts }
+func DefOpts() *Config { return &defOpts }
 
 // New instantiates a Hierarchy node.
 func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
@@ -95,7 +89,7 @@ func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 		// the field.
 		children: make(children[T]),
 
-		opts: &defOpts,
+		cfg: &defOpts,
 	}
 
 	for _, opt := range options {
@@ -107,16 +101,16 @@ func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 
 // WithLogger configures the logger option.
 func WithLogger[T Constraint](logger logrus.FieldLogger) Option[T] {
-	return func(h *Hierarchy[T]) { h.opts.Logger = logger }
+	return func(h *Hierarchy[T]) { h.cfg.Logger = logger }
 }
 
 // WithOptions configures the Hierarchy Opts.
-func WithOptions[T Constraint](options *Opts) Option[T] {
-	return func(h *Hierarchy[T]) { h.opts = options }
+func WithOptions[T Constraint](options *Config) Option[T] {
+	return func(h *Hierarchy[T]) { h.cfg = options }
 }
 
 // Options retrieves the Hierarchy's Opts.
-func (h *Hierarchy[T]) Options() *Opts { return h.opts }
+func (h *Hierarchy[T]) Options() *Config { return h.cfg }
 
 // Value retrieves the Hierarchy's data.
 func (h *Hierarchy[T]) Value() T { return h.value }
@@ -207,14 +201,13 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error
 		children = append(children, resl.node.value)
 	}
 
-	h.opts.Logger.Debugf("Hierarchy walk: %+v", children)
+	h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
 
-	numChildren := len(children)
-	if numChildren > 0 {
+	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
 
-		h.opts.Logger.Debugf("children: %+v", children)
+		h.cfg.Logger.Debugf("children: %+v", children)
 	}
 
 	if len(children) < 1 {
@@ -258,13 +251,12 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children [][]T, 
 		children = append(children, peers)
 	}
 
-	h.opts.Logger.Debugf("Hierarchy walk: %+v", children)
+	h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
 
-	numChildren := len(children)
-	if numChildren > 0 {
+	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
-		h.opts.Logger.Debugf("children: %+v", children)
+		h.cfg.Logger.Debugf("children: %+v", children)
 	}
 
 	if len(children) < 1 {
@@ -389,7 +381,7 @@ func (h *Hierarchy[T]) Locate(ctx context.Context, id T) (node *Hierarchy[T], er
 
 func (h *Hierarchy[T]) locate(ctx context.Context, id T, hierChan chan TraverseComm[T], wg *sync.WaitGroup) {
 	defer wg.Done()
-	// h.opts.Logger.Debugf("locate val %s in %+v", id, h)
+	// h.cfg.Logger.Debugf("locate val %s in %+v", id, h)
 
 	select {
 	case <-ctx.Done():
@@ -469,7 +461,7 @@ func (h *Hierarchy[T]) Walk(ctx context.Context, hierChan chan TraverseComm[T]) 
 				qLen--
 
 				// Debug: this operation is noisy.
-				// h.opts.Logger.Debugf("front: %+v, peers: %+v", front, newPeers)
+				// h.cfg.Logger.Debugf("front: %+v, peers: %+v", front, newPeers)
 
 				// Send node to caller via the channel.
 				hierChan <- TraverseComm[T]{node: front, newPeers: newPeers}

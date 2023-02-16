@@ -21,14 +21,14 @@ type (
 	//
 	// Synchronization is unnecessary, the type is designed for single write multiple read.
 	Hierarchy struct {
-		// value contains the node's data.
-		value string
-
 		// parent contains a reference to the upper Hierarchy.
 		parent *Hierarchy
 
 		// children holds references to nodes at a lower level.
 		children childMap
+
+		// value contains the node's data.
+		value string
 	}
 
 	// List is a type wrapper for []*Hierarchy.
@@ -38,9 +38,9 @@ type (
 
 	// TraverseChan defines a channel to communicate info between Hierarchy operations & it's callers.
 	TraverseChan struct {
-		newPeers bool
 		node     *Hierarchy
 		err      error
+		newPeers bool
 	}
 )
 
@@ -61,9 +61,7 @@ var (
 	ErrNotChild     = errors.New("is not a child of")
 )
 
-var (
-	fLogger logrus.FieldLogger = logrus.NewEntry(logrus.New())
-)
+var fLogger logrus.FieldLogger = logrus.NewEntry(logrus.New())
 
 // SetLogger configures a logrus.FieldLogger for the package.
 func SetLogger(l logrus.FieldLogger) { fLogger = l }
@@ -166,8 +164,7 @@ func (h *Hierarchy) AllChildren(ctx context.Context) (children []string, err err
 
 	fLogger.Debugf("Hierarchy walk: %+v", children)
 
-	numChildren := len(children)
-	if numChildren > 0 {
+	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
 
@@ -217,8 +214,7 @@ func (h *Hierarchy) AllChildrenByLevel(ctx context.Context) (children [][]string
 
 	fLogger.Debugf("Hierarchy walk: %+v", children)
 
-	numChildren := len(children)
-	if numChildren > 0 {
+	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
 		fLogger.Debugf("children: %+v", children)

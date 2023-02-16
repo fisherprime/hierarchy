@@ -11,7 +11,7 @@ import (
 func TestHierarchy_Serialize(t *testing.T) {
 	type args struct {
 		ctx  context.Context
-		opts lexer.Opts
+		opts lexer.Config
 	}
 
 	tests := []struct {
@@ -23,7 +23,7 @@ func TestHierarchy_Serialize(t *testing.T) {
 	}{
 		{
 			name: "valid",
-			args: args{context.Background(), *lexer.NewOpts()},
+			args: args{context.Background(), *lexer.DefaultConfig()},
 			fields: &Hierarchy[string]{
 				value: "2",
 				children: children[string]{"3": &Hierarchy[string]{
@@ -35,7 +35,7 @@ func TestHierarchy_Serialize(t *testing.T) {
 		},
 		{
 			name: "valid 2",
-			args: args{context.Background(), *lexer.NewOpts()},
+			args: args{context.Background(), *lexer.DefaultConfig()},
 			fields: &Hierarchy[string]{
 				value: "2",
 				children: children[string]{
@@ -59,7 +59,7 @@ func TestHierarchy_Serialize(t *testing.T) {
 				parent:   tt.fields.parent,
 				children: tt.fields.children,
 			}
-			gotOutput, err := h.Serialize(tt.args.ctx, tt.args.opts)
+			gotOutput, err := h.Serialize(tt.args.ctx, &tt.args.opts)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Hierarchy.Serialize() error = %v, wantErr %v", err, tt.wantErr)
 				return

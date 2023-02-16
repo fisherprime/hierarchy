@@ -16,6 +16,29 @@ presets:
   - test
   - unused
 
+linters:
+  enable:
+    - decorder
+    - dupl
+    - dupword
+    - dogsled
+    - errchkjson
+    - exhaustive
+    - gocyclo
+    - godot
+    - gofmt
+    - gofumpt
+    - goimports
+    - gomnd
+    - grouper
+    - ifshort
+    - importas
+    - maintidx
+    - makezero
+    - misspell
+    - varnamelen
+    - whitespace
+
 linters-settings:
   decorder:
     disable-dec-order-check: false
@@ -35,7 +58,7 @@ linters-settings:
     default-signifies-exhaustive: false
     package-scope-only: false
   gocyclo:
-    min-complexity: 10
+    min-complexity: 50
   godot:
     period: false
     capital: true
@@ -75,10 +98,23 @@ linters-settings:
     max-decl-lines: 2
     max-decl-chars: 40
   importas:
-    no-unaliased: true
+    no-unaliased: false
     no-extra-aliases: true
+    alias:
+      - pkg: github.com/volatiletech/authboss/v3/oauth2
+        alias: aboauth2 
+      - pkg: github.com/volatiletech/authboss/v3/recover
+        alias: abrecover
+      - pkg: github.com/go-openapi/runtime/middleware
+        alias: oamiddleware
+      - pkg: github.com/volatiletech/authboss-clientstate
+        alias: abclientstate
+      - pkg: html/template
+        alias: htmltemplate
+      - pkg: github.com/fabienm/go-logrus-formatters
+        alias: logformatters
   maintidx:
-    under: 100
+    under: 70
   makezero:
     suggest-new: true
   misspell:

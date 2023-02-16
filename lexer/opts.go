@@ -8,9 +8,9 @@ import (
 type (
 	// Opts options to guide the lex operation.
 	Opts struct {
+		Logger    logrus.FieldLogger
 		EndMarker rune
 		Splitter  rune
-		Logger    logrus.FieldLogger
 	}
 )
 

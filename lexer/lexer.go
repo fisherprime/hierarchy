@@ -22,15 +22,15 @@ type (
 
 	// Lexer defines a type to capture identifiers from a string.
 	Lexer struct {
-		opts Opts
+		source io.RuneReader // input source
+		opts   Opts
 
 		C chan Item // channel for scanned Items
 
-		source      io.RuneReader // input source
-		sourceIndex int           // start position of this item's rune
+		buffer []rune // slice of runes being lexed
 
-		buffer      []rune // slice of runes being lexed
-		bufferIndex int    // current buffer position
+		sourceIndex int // start position of this item's rune
+		bufferIndex int // current buffer position
 
 		valueCounter int
 		endCounter   int
@@ -192,7 +192,7 @@ func (l *Lexer) Peek() (r rune, err error) {
 
 // PeekNext return next N runes, without updating the index.
 //
-// This operation will return a shorter array if the the end of the source input is reached.
+// This operation will return a shorter array if the end of the source input is reached.
 func (l *Lexer) PeekNext(length int) (rList []rune, err error) {
 	if length < 1 {
 		err = fmt.Errorf("invalid peek length: %d", length)
@@ -204,7 +204,7 @@ func (l *Lexer) PeekNext(length int) (rList []rune, err error) {
 		return
 	}
 
-	var seen = 0
+	seen := 0
 	for ; seen < length; seen++ {
 		var r rune
 

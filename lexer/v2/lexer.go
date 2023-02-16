@@ -26,27 +26,26 @@ type (
 
 	// Lexer defines a type to capture identifiers from a string.
 	Lexer struct {
-		opts      Opts
-		Debug     bool
-		endMarker rune
-		splitter  rune
-		logger    logrus.FieldLogger
+		// source is the input source.
+		source io.RuneReader
+
+		cfg Config
 
 		// c is a channel for communicating lexed Items.
 		c chan Item
 
-		// source is the input source.
-		source io.RuneReader
-
 		// buffer is a slice of runes being lexed.
 		buffer []rune
-		//  bufferIndex is the current buffer position.
+
+		// bufferIndex is the current buffer position.
 		//
 		// When this value exceeds the length of buffer, the buffer is populated from the source.
 		bufferIndex int
 
 		valueCounter int
 		endCounter   int
+
+		Debug bool
 	}
 
 	// Option defines the Lexer functional option type
@@ -78,15 +77,19 @@ var (
 
 	alphaSymbols = [256]bool{
 		'_': true,
-		'-': true}
+		'-': true,
+	}
 )
 
 // New creates a new scanner for the input string
 func New(opts ...Option) *Lexer {
 	l := &Lexer{
-		endMarker: defEndMarker,
-		splitter:  dDefSplitter,
-		logger:    logrus.New(),
+		cfg: Config{
+			Debug:     false,
+			EndMarker: DefaultEndMarker,
+			Splitter:  DefaultSplitter,
+			Logger:    logrus.New(),
+		},
 
 		c: make(chan Item, defBufferSize),
 
@@ -101,26 +104,29 @@ func New(opts ...Option) *Lexer {
 	return l
 }
 
-// WithDebug configures the debug option.
-func WithDebug(debug bool) Option { return func(l *Lexer) { l.Debug = debug } }
+// WithConfig configures the [Lexer]'s [Config].
+func WithConfig(opts *Config) Option { return func(l *Lexer) { l.cfg = *opts } }
 
-// WithEndMarker configures the endMarker option.
-func WithEndMarker(r rune) Option { return func(l *Lexer) { l.endMarker = r } }
+// WithDebug configures the debug option.
+func WithDebug(debug bool) Option { return func(l *Lexer) { l.cfg.Debug = debug } }
+
+// WithEndMarker configures the EndMarker option.
+func WithEndMarker(r rune) Option { return func(l *Lexer) { l.cfg.EndMarker = r } }
 
 // WithSplitter configures the splitter option.
-func WithSplitter(r rune) Option { return func(l *Lexer) { l.splitter = r } }
+func WithSplitter(r rune) Option { return func(l *Lexer) { l.cfg.Splitter = r } }
 
 // WithLogger configures the logger option.
-func WithLogger(logger logrus.FieldLogger) Option { return func(l *Lexer) { l.logger = logger } }
+func WithLogger(logger logrus.FieldLogger) Option { return func(l *Lexer) { l.cfg.Logger = logger } }
 
 // WithSource configures the source option.
 func WithSource(source io.RuneReader) Option { return func(l *Lexer) { l.source = source } }
 
 // EndMarker obtains the configured end marker.
-func (l *Lexer) EndMarker() rune { return l.endMarker }
+func (l *Lexer) EndMarker() rune { return l.cfg.EndMarker }
 
 // Splitter obtains the configured value splitter.
-func (l *Lexer) Splitter() rune { return l.splitter }
+func (l *Lexer) Splitter() rune { return l.cfg.Splitter }
 
 // ValueCounter obtains valueCounter.
 func (l *Lexer) ValueCounter() int { return l.valueCounter }
@@ -129,7 +135,7 @@ func (l *Lexer) ValueCounter() int { return l.valueCounter }
 func (l *Lexer) EndCounter() int { return l.endCounter }
 
 // Logger obtains the logger.
-func (l *Lexer) Logger() logrus.FieldLogger { return l.logger }
+func (l *Lexer) Logger() logrus.FieldLogger { return l.cfg.Logger }
 
 // Lex lexes the input by executing state functions.
 func (l *Lexer) Lex(ctx context.Context) {
@@ -159,12 +165,12 @@ func (l *Lexer) LexWhitespace(ctx context.Context) NextOperation {
 	switch {
 	case next == emptyRune:
 		return nil
-	case next == l.endMarker:
+	case next == l.cfg.EndMarker:
 		l.endCounter++
 		l.Emit(ItemEndMarker)
 
 		return l.LexWhitespace(ctx)
-	case next == l.splitter:
+	case next == l.cfg.Splitter:
 		l.Emit(ItemSplitter)
 
 		return l.LexWhitespace(ctx)
@@ -215,7 +221,6 @@ func (l *Lexer) Next() (r rune) {
 	l.bufferIndex++
 
 	return
-
 }
 
 // Peek return the next rune, without updating the index.
@@ -231,7 +236,7 @@ func (l *Lexer) Peek() (r rune, err error) {
 
 // PeekN return the next N runes, without updating the index.
 //
-// This operation will return a shorter slice if the the end of the source is reached.
+// This operation will return a shorter slice if the end of the source is reached.
 func (l *Lexer) PeekN(n int) (list []rune, err error) {
 	if n < 1 {
 		err = fmt.Errorf("%w: %d", ErrInvalidPeekLength, n)
@@ -333,7 +338,7 @@ func (l *Lexer) Emit(t ItemID) {
 
 	if l.Debug {
 		// Debug operation makes this operation un-inlinable.
-		l.logger.Debug("lexer Emit: ", string(buf))
+		l.cfg.Logger.Debug("lexer Emit: ", string(buf))
 	}
 
 	l.c <- Item{

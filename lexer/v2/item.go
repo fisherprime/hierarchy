@@ -7,9 +7,9 @@ type (
 
 	// Item type holding token, value & item type of scanned rune
 	Item struct {
-		ID  ItemID // The type of this Item
-		Val []byte // The value of this Item
 		Err error
+		Val []byte // The value of this Item
+		ID  ItemID // The type of this Item
 	}
 )
 
