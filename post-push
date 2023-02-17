@@ -1,0 +1,54 @@
+#!/bin/bash
+
+changed() {
+	[[ "$(git diff-files --name-only)" == *"$1"* ]] &&
+		return 1
+
+	return 0
+}
+
+disable_hooks() {
+	chmod -x post-commit post-push
+}
+
+enable_hooks() {
+	chmod +x post-commit post-push
+}
+
+disable_hooks
+trap enable_hooks EXIT
+
+require_push=0
+
+if [[ -x "$(command -v syft)" ]]; then
+	spdx_bom="bom.spdx.json"
+	spdx_bom_tmp="$spdx_bom.tmp"
+
+	syft packages . -o spdx-json >"$spdx_bom.tmp"
+
+	cnt=3
+	[[ -f "$spdx_bom" ]] &&
+		cnt="$(diff "$spdx_bom" "$spdx_bom_tmp" | sed -E '/^([<|>]\s+"(documentNamespace|created)".*|---)$/d' | wc -l)"
+
+	[[ cnt -gt 2 ]] &&
+		mv "$spdx_bom_tmp" "$spdx_bom" &&
+		git add "$spdx_bom" &&
+		git commit -m "chore spdx: Update SPDX BOM" && require_push=1
+
+	[[ -f "$spdx_bom_tmp" ]] && rm "$spdx_bom_tmp"
+fi
+
+if [[ -x "$(command -v git-cliff)" ]]; then
+	changelog="CHANGELOG.md"
+	git-cliff -lu -o "$changelog"
+
+	changed $changelog
+	if [[ $? -eq 1 ]]; then
+		git add "$changelog" &&
+			git commit -m "chore changelog: Update CHANGELOG" && require_push=1
+	fi
+fi
+
+[[ require_push -eq 1 ]] && git push --follow-tags
+
+exit 0

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [[ -x "$(command -v trivy)" ]]; then
+	trivy_flags="--quiet"
+	trivy_config="./trivy.yaml"
+
+	[[ -f "$trivy_config" ]] && trivy_flags="$trivy_flags -c $trivy_config"
+
+	trivy fs . $trivy_flags
+
+fi
+
+[[ -x "$(command -v osv-scanner)" ]] &&
+	osv-scanner -r .
+
+exit 0
