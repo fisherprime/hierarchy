@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -25,18 +24,6 @@ type (
 
 		builders  []Builder[T]
 		isOrdered bool
-	}
-
-	// Config defines configuration options for the [BuildSource] & [Hierarchy]'s operations.
-	Config struct {
-		Logger logrus.FieldLogger
-		Debug  bool
-	}
-
-	// DefaultBuilder is a sample Builder interface implementation.
-	DefaultBuilder struct {
-		value  string
-		parent string
 	}
 
 	// BuildOption defines the BuildSource functional option type.
@@ -67,7 +54,11 @@ func (d *DefaultBuilder) Parent() string { return d.parent }
 
 // NewBuildSource instantiates a BuildSource.
 func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
-	b := &BuildSource[T]{builders: []Builder[T]{}}
+	b := &BuildSource[T]{
+		cfg:       *DefConfig(),
+		builders:  []Builder[T]{},
+		isOrdered: false,
+	}
 
 	for _, opt := range options {
 		opt(b)
@@ -76,24 +67,14 @@ func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
 	return b
 }
 
-// WithConfig configures the [BuildSource]'s [Config].
-func WithConfig[T Constraint](cfg *Config) BuildOption[T] {
+// WithBuildConfig configures the [BuildSource]'s [Config].
+func WithBuildConfig[T Constraint](cfg *Config) BuildOption[T] {
 	return func(b *BuildSource[T]) { b.cfg = *cfg }
 }
 
 // WithBuilders configures the underlying list.
 func WithBuilders[T Constraint](builders []Builder[T]) BuildOption[T] {
 	return func(b *BuildSource[T]) { b.builders = builders }
-}
-
-// WithBuildLogger configures the logger option.
-func WithBuildLogger[T Constraint](logger logrus.FieldLogger) BuildOption[T] {
-	return func(b *BuildSource[T]) { b.cfg.Logger = logger }
-}
-
-// WithDebug configures the debug option
-func WithDebug[T Constraint](debug bool) BuildOption[T] {
-	return func(b *BuildSource[T]) { b.cfg.Debug = debug }
 }
 
 // Len retrieves the length of the BuildSource.

@@ -28,7 +28,7 @@ type (
 	//
 	// Synchronization is unnecessary, the type is designed for single write multiple read.
 	Hierarchy[T Constraint] struct {
-		// cfg contains a pointer to options shared by all Hierarchy nodes.
+		// cfg contains a pointer to a [Config] shared by all Hierarchy nodes.
 		cfg *Config
 
 		// parent contains a reference to the upper Hierarchy.
@@ -41,10 +41,16 @@ type (
 		children children[T]
 	}
 
-	// List is a type wrapper for []*Hierarchy.
-	List[T Constraint] []*Hierarchy[T]
+	// Config defines configuration options for the [BuildSource] & [Hierarchy]'s operations.
+	Config struct {
+		Logger logrus.FieldLogger
+		Debug  bool
+	}
 
 	children[T Constraint] map[T]*Hierarchy[T]
+
+	// List is a type wrapper for []*Hierarchy.
+	List[T Constraint] []*Hierarchy[T]
 
 	// TraverseComm defines a channel to communicate info between Hierarchy operations & it's callers.
 	TraverseComm[T Constraint] struct {
@@ -60,7 +66,7 @@ type (
 const (
 	traverseBufferSize = 10
 
-	notChildFmt = "(%v) %w (%v)"
+	notChildErrFmt = "(%v) %w (%v)"
 )
 
 // Errors encountered when handling a Hierarchy.
@@ -73,23 +79,20 @@ var (
 	ErrNotChild     = errors.New("is not a child of")
 )
 
-var (
-	defLogger = logrus.New()
-	defOpts   = Config{Logger: defLogger}
-)
-
-// DefOpts obtains the package's  Hierarchy default options.
-func DefOpts() *Config { return &defOpts }
+// DefConfig obtains the package's  Hierarchy default options.
+func DefConfig() *Config {
+	return &Config{
+		Logger: logrus.New(),
+		Debug:  false,
+	}
+}
 
 // New instantiates a Hierarchy node.
 func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 	h := &Hierarchy[T]{
-		value: value,
-		// This allocation will slow down the generation process but avoids multiple nil checks on
-		// the field.
+		cfg:      DefConfig(),
+		value:    value,
 		children: make(children[T]),
-
-		cfg: &defOpts,
 	}
 
 	for _, opt := range options {
@@ -99,18 +102,13 @@ func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 	return h
 }
 
-// WithLogger configures the logger option.
-func WithLogger[T Constraint](logger logrus.FieldLogger) Option[T] {
-	return func(h *Hierarchy[T]) { h.cfg.Logger = logger }
+// WithConfig configures the Hierarchy [Config].
+func WithConfig[T Constraint](cfg *Config) Option[T] {
+	return func(h *Hierarchy[T]) { h.cfg = cfg }
 }
 
-// WithOptions configures the Hierarchy Opts.
-func WithOptions[T Constraint](options *Config) Option[T] {
-	return func(h *Hierarchy[T]) { h.cfg = options }
-}
-
-// Options retrieves the Hierarchy's Opts.
-func (h *Hierarchy[T]) Options() *Config { return h.cfg }
+// Config retrieves the Hierarchy's Opts.
+func (h *Hierarchy[T]) Config() *Config { return h.cfg }
 
 // Value retrieves the Hierarchy's data.
 func (h *Hierarchy[T]) Value() T { return h.value }
@@ -419,7 +417,7 @@ func (h *Hierarchy[T]) ChildTo(ctx context.Context, parentID, childID T) (child 
 	}
 
 	if child, err = parent.Locate(ctx, parentID); err != nil {
-		err = fmt.Errorf(notChildFmt, childID, ErrNotChild, parentID)
+		err = fmt.Errorf(notChildErrFmt, childID, ErrNotChild, parentID)
 	}
 
 	return

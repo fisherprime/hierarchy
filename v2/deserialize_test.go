@@ -38,7 +38,7 @@ func TestDeserialize(t *testing.T) {
 				children: children[int]{3: &Hierarchy[int]{
 					value: 3, children: children[int]{},
 				}},
-				cfg: DefOpts(),
+				cfg: DefConfig(),
 			},
 			// wantErr: true,
 		},
@@ -53,7 +53,7 @@ func TestDeserialize(t *testing.T) {
 				children: children[int]{3: &Hierarchy[int]{
 					value: 3, children: children[int]{},
 				}},
-				cfg: DefOpts(),
+				cfg: DefConfig(),
 			},
 			// wantErr: true,
 		},
@@ -73,7 +73,7 @@ func TestDeserialize(t *testing.T) {
 						value: 4, children: children[int]{},
 					},
 				},
-				cfg: DefOpts(),
+				cfg: DefConfig(),
 			},
 			wantErr: true,
 		},
