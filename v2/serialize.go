@@ -3,14 +3,15 @@ package hierarchy
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
-	"gitlab.com/fisherprime/hierarchy/lexer"
+	"gitlab.com/fisherprime/hierarchy/lexer/v2"
 )
 
 // Serialize transforms a Hierarchy into a string.
-func (h *Hierarchy) Serialize(ctx context.Context, opts lexer.Opts) (output string, err error) {
+func (h *Hierarchy[T]) Serialize(ctx context.Context, opts lexer.Opts) (output string, err error) {
 	select {
 	case <-ctx.Done():
 		return
@@ -58,18 +59,19 @@ func (h *Hierarchy) Serialize(ctx context.Context, opts lexer.Opts) (output stri
 }
 
 // serialize performs the serialization grunt work.
-func (h *Hierarchy) serialize(ctx context.Context, opts lexer.Opts, serChan chan string) {
-	if h == nil || h.value == "" {
+func (h *Hierarchy[T]) serialize(ctx context.Context, opts lexer.Opts, serChan chan string) {
+	var rootValue T
+	if h == nil || h.value == rootValue {
 		return
 	}
-	serChan <- h.value
+	serChan <- fmt.Sprint(h.value)
 
 	// Create a sorted slice to hold the child *Hierarchy(ies) for serialization.
 	//
 	// Using the map directly is not guaranteed to follow the same order yielding valid but
 	// different serialization output.
 	index, lenChildren := 0, len(h.children)
-	sortedChildren := make(List, lenChildren)
+	sortedChildren := make(List[T], lenChildren)
 	for _, child := range h.children {
 		sortedChildren[index] = child
 		index++
