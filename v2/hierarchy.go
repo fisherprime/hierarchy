@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/constraints"
 )
 
 // REF: https://www.geeksforgeeks.org/generic-tree-level-order-traversal
@@ -16,39 +17,56 @@ import (
 //
 // runes are singe UTF-8 codepoints, not used as the hierarchy expects strings.
 
+// Constraint is a wrapper interface containing comparable & constraints.Ordered.
+type Constraint interface {
+	comparable
+	constraints.Ordered
+}
+
 type (
 	// Hierarchy defines an n-array tree to hold hierarchies.
 	//
 	// Synchronization is unnecessary, the type is designed for single write multiple read.
-	Hierarchy struct {
+	Hierarchy[T Constraint] struct {
 		// value contains the node's data.
-		value string
+		value T
 
 		// parent contains a reference to the upper Hierarchy.
-		parent *Hierarchy
+		parent *Hierarchy[T]
 
 		// children holds references to nodes at a lower level.
-		children childMap
+		children children[T]
+
+		// opts contains a pointer to options shared by all Hierarchy nodes.
+		opts *Opts
 	}
 
 	// List is a type wrapper for []*Hierarchy.
-	List []*Hierarchy
+	List[T Constraint] []*Hierarchy[T]
 
-	childMap map[string]*Hierarchy
+	children[T Constraint] map[T]*Hierarchy[T]
 
-	// TraverseChan defines a channel to communicate info between Hierarchy operations & it's callers.
-	TraverseChan struct {
+	// TraverseComm defines a channel to communicate info between Hierarchy operations & it's callers.
+	TraverseComm[T Constraint] struct {
 		newPeers bool
-		node     *Hierarchy
+		node     *Hierarchy[T]
 		err      error
 	}
+
+	// Opts defines options for the Hierarchy's operations.
+	Opts struct {
+		Debug  bool
+		Logger logrus.FieldLogger
+	}
+
+	// Option defines the Hierarchy functional option type.
+	Option[T Constraint] func(*Hierarchy[T])
 )
 
 const (
-	initialQueueLen    = 0
 	traverseBufferSize = 10
 
-	notChildFmt = "(%s) %w (%s)"
+	notChildFmt = "(%v) %w (%v)"
 )
 
 // Errors encountered when handling a Hierarchy.
@@ -62,41 +80,67 @@ var (
 )
 
 var (
-	fLogger logrus.FieldLogger = logrus.NewEntry(logrus.New())
+	defLogger = logrus.New()
+	defOpts   = Opts{Logger: defLogger}
 )
 
-// SetLogger configures a logrus.FieldLogger for the package.
-func SetLogger(l logrus.FieldLogger) { fLogger = l }
+// DefOpts obtains the package's  Hierarchy default options.
+func DefOpts() *Opts { return &defOpts }
 
-// New instantiates a Hierarchy.
-func New(value string) *Hierarchy {
-	return &Hierarchy{
-		value:    value,
-		children: make(childMap),
+// New instantiates a Hierarchy node.
+func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
+	h := &Hierarchy[T]{
+		value: value,
+		// This allocation will slow down the generation process but avoids multiple nil checks on
+		// the field.
+		children: make(children[T]),
+
+		opts: &defOpts,
 	}
+
+	for _, opt := range options {
+		opt(h)
+	}
+
+	return h
 }
 
-// Value retrieves the Hierarchy's data.
-func (h *Hierarchy) Value() string { return h.value }
+// WithLogger configures the logger option.
+func WithLogger[T Constraint](logger logrus.FieldLogger) Option[T] {
+	return func(h *Hierarchy[T]) { h.opts.Logger = logger }
+}
 
-// Parent retrieves the Hierarchy's parent reference.
-func (h *Hierarchy) Parent() *Hierarchy { return h.parent }
+// WithOptions configures the Hierarchy Opts.
+func WithOptions[T Constraint](options *Opts) Option[T] {
+	return func(h *Hierarchy[T]) { h.opts = options }
+}
+
+// Options retrieves the Hierarchy's Opts.
+func (h *Hierarchy[T]) Options() *Opts { return h.opts }
+
+// Value retrieves the Hierarchy's data.
+func (h *Hierarchy[T]) Value() T { return h.value }
+
+// Parent retrieves a reference to the Hierarchy's parent.
+//
+// Value is nil for the root node.
+func (h *Hierarchy[T]) Parent() *Hierarchy[T] { return h.parent }
 
 // SetParent for a Hierarchy.
-func (h *Hierarchy) SetParent(parent *Hierarchy) { h.parent = parent }
+func (h *Hierarchy[T]) SetParent(parent *Hierarchy[T]) { h.parent = parent }
 
 // HasChild checks for the existence of an immediate child.
-func (h *Hierarchy) HasChild(_ context.Context, childID string) (ok bool) {
+func (h *Hierarchy[T]) HasChild(_ context.Context, childID T) (ok bool) {
 	_, ok = h.children[childID]
 	return
 }
 
 // AddChild to a Hierarchy.
-func (h *Hierarchy) AddChild(ctx context.Context, child *Hierarchy) (err error) {
-	// Search for existing immediate child.
+//
+// Throws an error on existing child.
+func (h *Hierarchy[T]) AddChild(ctx context.Context, child *Hierarchy[T]) (err error) {
 	if h.HasChild(ctx, child.value) {
-		err = fmt.Errorf("(%s) %w (%s)", child.value, ErrAlreadyChild, h.value)
-		return
+		return fmt.Errorf("(%v) %w (%v)", child.value, ErrAlreadyChild, h.value)
 	}
 
 	child.parent = h
@@ -106,20 +150,19 @@ func (h *Hierarchy) AddChild(ctx context.Context, child *Hierarchy) (err error) 
 }
 
 // AddChildTo to a Hierarchy.
-func (h *Hierarchy) AddChildTo(ctx context.Context, parentID string, child *Hierarchy) (err error) {
-	var parent *Hierarchy
+func (h *Hierarchy[T]) AddChildTo(ctx context.Context, parentID T, child *Hierarchy[T]) (err error) {
+	var parent *Hierarchy[T]
 	if parent, err = h.Locate(ctx, parentID); err != nil {
-		err = fmt.Errorf("parent (%s) %w", parentID, err)
-		return
+		return fmt.Errorf("parent (%v) %w", parentID, err)
 	}
 
 	return parent.AddChild(ctx, child)
 }
 
-// PopChild removes an immediate child to the Hierarchy.
-func (h *Hierarchy) PopChild(ctx context.Context, childID string) (child *Hierarchy, err error) {
+// PopImmediateChild removes an immediate child to the Hierarchy, returning it's reference.
+func (h *Hierarchy[T]) PopChild(ctx context.Context, childID T) (child *Hierarchy[T], err error) {
 	if !h.HasChild(ctx, childID) {
-		err = fmt.Errorf("child (%s) of (%s): %w", childID, h.value, ErrNotFound)
+		err = fmt.Errorf("child (%v) of (%v): %w", childID, h.value, ErrNotFound)
 		return
 	}
 
@@ -130,8 +173,8 @@ func (h *Hierarchy) PopChild(ctx context.Context, childID string) (child *Hierar
 }
 
 // Children lists the immediate children for a Hierarchy.
-func (h *Hierarchy) Children(ctx context.Context) (children []string) {
-	children = make([]string, len(h.children))
+func (h *Hierarchy[T]) Children(ctx context.Context) (children []T) {
+	children = make([]T, len(h.children))
 
 	index := 0
 	for key := range h.children {
@@ -142,12 +185,12 @@ func (h *Hierarchy) Children(ctx context.Context) (children []string) {
 	return
 }
 
-// AllChildren for a Hierarchy.
+// AllChildren lists immediate and children-of children for a Hierarchy.
 //
 // NOTE: This operation is expensive.
-func (h *Hierarchy) AllChildren(ctx context.Context) (children []string, err error) {
-	children = make([]string, 0)
-	hierChan := make(chan TraverseChan, traverseBufferSize)
+func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error) {
+	children = make([]T, 0)
+	hierChan := make(chan TraverseComm[T], traverseBufferSize)
 
 	go h.Walk(ctx, hierChan)
 
@@ -164,14 +207,14 @@ func (h *Hierarchy) AllChildren(ctx context.Context) (children []string, err err
 		children = append(children, resl.node.value)
 	}
 
-	fLogger.Debugf("Hierarchy walk: %+v", children)
+	h.opts.Logger.Debugf("Hierarchy walk: %+v", children)
 
 	numChildren := len(children)
 	if numChildren > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
 
-		fLogger.Debugf("children: %+v", children)
+		h.opts.Logger.Debugf("children: %+v", children)
 	}
 
 	if len(children) < 1 {
@@ -181,16 +224,16 @@ func (h *Hierarchy) AllChildren(ctx context.Context) (children []string, err err
 	return
 }
 
-// AllChildrenByLevel for a Hierarchy.
+// AllChildrenByLevel lists immediate and children-of children for a Hierarchy by level.
 //
 // NOTE: This operation is expensive.
-func (h *Hierarchy) AllChildrenByLevel(ctx context.Context) (children [][]string, err error) {
-	children = make([][]string, 0)
-	hierChan := make(chan TraverseChan, traverseBufferSize)
+func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children [][]T, err error) {
+	children = make([][]T, 0)
+	hierChan := make(chan TraverseComm[T], traverseBufferSize)
 
 	go h.Walk(ctx, hierChan)
 
-	var peers []string
+	var peers []T
 	for {
 		resl, proceed := <-hierChan
 		if !proceed {
@@ -208,20 +251,20 @@ func (h *Hierarchy) AllChildrenByLevel(ctx context.Context) (children [][]string
 		if len(peers) > 0 {
 			children = append(children, peers)
 		}
-		peers = []string{resl.node.value}
+		peers = []T{resl.node.value}
 	}
 
 	if len(peers) > 0 {
 		children = append(children, peers)
 	}
 
-	fLogger.Debugf("Hierarchy walk: %+v", children)
+	h.opts.Logger.Debugf("Hierarchy walk: %+v", children)
 
 	numChildren := len(children)
 	if numChildren > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
-		fLogger.Debugf("children: %+v", children)
+		h.opts.Logger.Debugf("children: %+v", children)
 	}
 
 	if len(children) < 1 {
@@ -231,8 +274,8 @@ func (h *Hierarchy) AllChildrenByLevel(ctx context.Context) (children [][]string
 	return
 }
 
-// AllChildrenOf returns a list of children as defined in Hierarchy for some parent Hierarchy.
-func (h *Hierarchy) AllChildrenOf(ctx context.Context, parentID string) (children []string, err error) {
+// AllChildrenOf performs the AllChildren operation for some parent in the Hierarchy.
+func (h *Hierarchy[T]) AllChildrenOf(ctx context.Context, parentID T) (children []T, err error) {
 	node, err := h.Locate(ctx, parentID)
 	if err != nil {
 		return
@@ -241,9 +284,8 @@ func (h *Hierarchy) AllChildrenOf(ctx context.Context, parentID string) (childre
 	return node.AllChildren(ctx)
 }
 
-// AllChildrenOfByLevel returns an array-of-arrays of children as defined in Hierarchy for some
-// parent Hierarchy.
-func (h *Hierarchy) AllChildrenOfByLevel(ctx context.Context, parentID string) (children [][]string, err error) {
+// AllChildrenOfByLevel performs the AllChildren operation for some parent in the Hierarchy by level.
+func (h *Hierarchy[T]) AllChildrenOfByLevel(ctx context.Context, parentID T) (children [][]T, err error) {
 	node, err := h.Locate(ctx, parentID)
 	if err != nil {
 		return
@@ -253,9 +295,9 @@ func (h *Hierarchy) AllChildrenOfByLevel(ctx context.Context, parentID string) (
 }
 
 // LeafNodes returns an array of terminal Hierarchy(ies).
-func (h *Hierarchy) LeafNodes(ctx context.Context) (termNodes List, err error) {
-	termNodes = make(List, 0)
-	hierChan := make(chan TraverseChan, traverseBufferSize)
+func (h *Hierarchy[T]) LeafNodes(ctx context.Context) (termNodes List[T], err error) {
+	termNodes = make(List[T], 0)
+	hierChan := make(chan TraverseComm[T], traverseBufferSize)
 
 	go h.Walk(ctx, hierChan)
 
@@ -268,7 +310,7 @@ func (h *Hierarchy) LeafNodes(ctx context.Context) (termNodes List, err error) {
 			return
 		}
 
-		if len(resl.node.children) < 1 {
+		if resl.node.children == nil || len(resl.node.children) < 1 {
 			termNodes = append(termNodes, resl.node)
 		}
 	}
@@ -281,13 +323,13 @@ func (h *Hierarchy) LeafNodes(ctx context.Context) (termNodes List, err error) {
 }
 
 // Leaves returns an array of leaves (terminal node) values as defined in Hierarchy.
-func (h *Hierarchy) Leaves(ctx context.Context) (termValues []string, err error) {
+func (h *Hierarchy[T]) Leaves(ctx context.Context) (termValues []T, err error) {
 	nodes, err := h.LeafNodes(ctx)
 	if err != nil {
 		return
 	}
 
-	termValues = make([]string, len(nodes))
+	termValues = make([]T, len(nodes))
 	for index := range nodes {
 		termValues[index] = nodes[index].value
 	}
@@ -296,10 +338,10 @@ func (h *Hierarchy) Leaves(ctx context.Context) (termValues []string, err error)
 }
 
 // ParentTo returns the parent Hierarchy for some node identified by its id.
-func (h *Hierarchy) ParentTo(ctx context.Context, childID string) (parent *Hierarchy, err error) {
-	var node *Hierarchy
+func (h *Hierarchy[T]) ParentTo(ctx context.Context, childID T) (parent *Hierarchy[T], err error) {
+	var node *Hierarchy[T]
 	if node, err = h.Locate(ctx, childID); err != nil {
-		err = fmt.Errorf("(%s) %w", childID, err)
+		err = fmt.Errorf("(%v) %w", childID, err)
 		return
 	}
 
@@ -310,7 +352,7 @@ func (h *Hierarchy) ParentTo(ctx context.Context, childID string) (parent *Hiera
 }
 
 // Locate searches for an id & returns it's Hierarchy.
-func (h *Hierarchy) Locate(ctx context.Context, id string) (node *Hierarchy, err error) {
+func (h *Hierarchy[T]) Locate(ctx context.Context, id T) (node *Hierarchy[T], err error) {
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
@@ -320,7 +362,7 @@ func (h *Hierarchy) Locate(ctx context.Context, id string) (node *Hierarchy, err
 			return h, nil
 		}
 
-		hierChan := make(chan TraverseChan)
+		hierChan := make(chan TraverseComm[T])
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
 		go h.locate(ctx, id, hierChan, wg)
@@ -345,16 +387,16 @@ func (h *Hierarchy) Locate(ctx context.Context, id string) (node *Hierarchy, err
 	return
 }
 
-func (h *Hierarchy) locate(ctx context.Context, id string, hierChan chan TraverseChan, wg *sync.WaitGroup) {
+func (h *Hierarchy[T]) locate(ctx context.Context, id T, hierChan chan TraverseComm[T], wg *sync.WaitGroup) {
 	defer wg.Done()
-	// fLogger.Debugf("locate val %s in %+v", id, h)
+	// h.opts.Logger.Debugf("locate val %s in %+v", id, h)
 
 	select {
 	case <-ctx.Done():
 		return
 	default:
 		if h.value == id {
-			hierChan <- TraverseChan{node: h}
+			hierChan <- TraverseComm[T]{node: h}
 			return
 		}
 
@@ -363,7 +405,7 @@ func (h *Hierarchy) locate(ctx context.Context, id string, hierChan chan Travers
 		}
 
 		if node, ok := h.children[id]; ok {
-			hierChan <- TraverseChan{node: node}
+			hierChan <- TraverseComm[T]{node: node}
 			return
 		}
 
@@ -377,10 +419,10 @@ func (h *Hierarchy) locate(ctx context.Context, id string, hierChan chan Travers
 }
 
 // ChildTo searches for the child to some parent & returns it's Hierarchy.
-func (h *Hierarchy) ChildTo(ctx context.Context, parentID, childID string) (child *Hierarchy, err error) {
-	var parent *Hierarchy
+func (h *Hierarchy[T]) ChildTo(ctx context.Context, parentID, childID T) (child *Hierarchy[T], err error) {
+	var parent *Hierarchy[T]
 	if parent, err = h.Locate(ctx, parentID); err != nil {
-		err = fmt.Errorf("parent (%s) %w", parentID, err)
+		err = fmt.Errorf("parent (%v) %w", parentID, err)
 		return
 	}
 
@@ -396,7 +438,7 @@ func (h *Hierarchy) ChildTo(ctx context.Context, parentID, childID string) (chil
 //
 // This operation uses channels to minimize resource wastage.
 // A context.Context is used to terminate the walk operation.
-func (h *Hierarchy) Walk(ctx context.Context, hierChan chan TraverseChan) {
+func (h *Hierarchy[T]) Walk(ctx context.Context, hierChan chan TraverseComm[T]) {
 	defer close(hierChan)
 
 	select {
@@ -410,7 +452,7 @@ func (h *Hierarchy) Walk(ctx context.Context, hierChan chan TraverseChan) {
 		}
 
 		// Level order traversal.
-		queue := List{h}
+		queue := List[T]{h}
 
 		for {
 			qLen := len(queue)
@@ -422,15 +464,15 @@ func (h *Hierarchy) Walk(ctx context.Context, hierChan chan TraverseChan) {
 			newPeers := true
 			for qLen > 0 {
 				// Pop from queue.
-				var front *Hierarchy
+				var front *Hierarchy[T]
 				front, queue = queue[0], queue[1:]
 				qLen--
 
 				// Debug: this operation is noisy.
-				// fLogger.Debugf("front: %+v, peers: %+v", front, newPeers)
+				// h.opts.Logger.Debugf("front: %+v, peers: %+v", front, newPeers)
 
 				// Send node to caller via the channel.
-				hierChan <- TraverseChan{node: front, newPeers: newPeers}
+				hierChan <- TraverseComm[T]{node: front, newPeers: newPeers}
 				newPeers = false
 
 				// Add children to the queue.
@@ -447,10 +489,10 @@ func (h *Hierarchy) Walk(ctx context.Context, hierChan chan TraverseChan) {
 }
 
 // Len is the number of elements in the collection.
-func (l *List) Len() int { return len(*l) }
+func (l *List[T]) Len() int { return len(*l) }
 
 // Less reports whether the element with index i must sort before the element with index j.
-func (l *List) Less(i int, j int) bool { return (*l)[i].value < (*l)[j].value }
+func (l *List[T]) Less(i int, j int) bool { return (*l)[i].value < (*l)[j].value }
 
 // Swap swaps the elements with indexes i and j.
-func (l *List) Swap(i int, j int) { (*l)[i], (*l)[j] = (*l)[j], (*l)[i] }
+func (l *List[T]) Swap(i int, j int) { (*l)[i], (*l)[j] = (*l)[j], (*l)[i] }

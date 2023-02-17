@@ -3,36 +3,32 @@ package hierarchy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
-	"gitlab.com/fisherprime/hierarchy/lexer"
+	"gitlab.com/fisherprime/hierarchy/lexer/v2"
 )
 
 // Deserialization errors.
 var (
-	ErrEmptyDeserializationSrc = errors.New("empty deserialization source")
-	ErrExcessiveValues         = errors.New("the deserialization source has excessive values")
-	ErrExcessiveEndMarkers     = fmt.Errorf("the deserialization source has excessive end markers")
+	ErrExcessiveValues     = errors.New("the deserialization source has excessive values")
+	ErrExcessiveEndMarkers = fmt.Errorf("the deserialization source has excessive end markers")
 )
 
 // Deserialize transforms a serialized tree into a Hierarchy.
 //
 // An invalid entry will result in a truncated Hierarchy.
-func Deserialize(ctx context.Context, opts lexer.Opts, input string) (h *Hierarchy, err error) {
-	if input == "" {
-		err = ErrEmptyDeserializationSrc
-		return
-	}
-
+func Deserialize[T Constraint](ctx context.Context, opts ...lexer.Option) (h *Hierarchy[T], err error) {
 	select {
 	case <-ctx.Done():
 		return
 	default:
-		l := lexer.New(opts, input)
+		l := lexer.New(opts...)
 		go l.Lex(ctx)
 
-		h = New("")
+		var v T
+		h = New(v)
 		if _, err = h.deserialize(ctx, l); err != nil {
 			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
 			return
@@ -46,6 +42,7 @@ func Deserialize(ctx context.Context, opts lexer.Opts, input string) (h *Hierarc
 		case diff < 0:
 			// Excessive end markers.
 			err = fmt.Errorf("%w: %s +%d", ErrExcessiveEndMarkers, string(l.EndMarker()), diff*-1)
+
 		default:
 			// Valid
 		}
@@ -54,26 +51,30 @@ func Deserialize(ctx context.Context, opts lexer.Opts, input string) (h *Hierarc
 		}
 
 		children, _ := h.AllChildrenByLevel(ctx)
-		fLogger.Debugf("hierarchy: %+v", children)
+		l.Logger().Debugf("hierarchy: %+v", children)
 	}
 
 	return
 }
 
 // deserialize performs the deserialization grunt work.
-func (h *Hierarchy) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, err error) {
+//
+// Using json to deserialize the input to the intended type.
+func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, err error) {
+	var rootValue T
+
 	select {
 	case <-ctx.Done():
 		end = true
 		return
 	default:
-		item, proceed := <-l.C
+		item, proceed := l.Item()
 		if !proceed {
 			end = true
 			return
 		}
 
-		fLogger.Debugf("lexed item: %+v", item)
+		l.Logger().Debugf("lexed item: %+v", item)
 
 		switch item.ID {
 		case lexer.ItemEOF:
@@ -91,19 +92,24 @@ func (h *Hierarchy) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, 
 			return
 		}
 
-		*h = *New(item.Val)
+		var dest T
+		if err = json.Unmarshal(item.Val, &dest); err != nil {
+			return
+		}
+
+		*h = *New(dest)
 		for {
 			var endChildren bool
 
 			// NOTE: Receivers are passed by copy & need to be initialized; a pointer to nil won't
 			// store the results.
-			child := New("")
+			child := New(rootValue)
 			if endChildren, err = child.deserialize(ctx, l); endChildren || err != nil {
 				// End of children.
 				return
 			}
 
-			if child.value == "" {
+			if child.value == rootValue {
 				continue
 			}
 

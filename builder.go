@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: NONE
+// SPDX-License-Identifier: MIT
 package hierarchy
 
 import (
@@ -10,18 +10,18 @@ import (
 )
 
 type (
-	// Builder defines an interface for entities that can be read into a `HierarchyNode`.
+	// Builder defines an interface for entities that can be read into a Hierarchy.
 	Builder interface {
-		// Value obtains the value stored by the `Builder`.
+		// Value obtains the value stored by the Builder.
 		Value() string
-		// Parent obtains the parent stored by the `Builder`
+		// Parent obtains the parent stored by the Builder
 		Parent() string
 	}
 
-	// BuilderList is a wrapper type for `[]Builder`.
+	// BuilderList is a wrapper type for []Builder.
 	BuilderList []Builder
 
-	// DefaultBuilder is a sample `Builder` interface implementation.
+	// DefaultBuilder is a sample Builder interface implementation.
 	DefaultBuilder struct {
 		value  string
 		parent string
@@ -30,29 +30,32 @@ type (
 
 // Hierarchy building errors.
 var (
-	ErrMissingRootNode        = errors.New("missing root node")
-	ErrEmptyHierarchyBuildSrc = errors.New("empty hierarchy build source")
-	ErrInvalidBuildCache      = errors.New("invalid hierarchy build cache")
-	ErrInvalidHierarchySrc    = errors.New("invalid hierarchy source")
-	ErrLocateParents          = errors.New("unable to locate parents(s)")
-	ErrMultipleRootNodes      = errors.New("hierarchy has multiple root nodes")
+	ErrBuildHierarchy = errors.New("failed to build hierarchy")
 
-	ErrPanicked = errors.New("operation panic'ed")
+	ErrMissingRootNode   = errors.New("missing root node")
+	ErrMultipleRootNodes = errors.New("hierarchy has multiple root nodes")
+
+	ErrEmptyHierarchySrc      = errors.New("empty hierarchy source")
+	ErrInvalidHierarchySrc    = errors.New("invalid hierarchy source")
+	ErrInconsistentBuildCache = errors.New("inconsistency between hierarchy and build cache")
+
+	ErrLocateParents = errors.New("unable to locate parents(s)")
+
+	ErrPanicked = errors.New("recovery from panic")
 )
 
-// Value obtains the value stored by the `DefaultBuilder`.
+// Value obtains the value stored by the DefaultBuilder.
 func (d *DefaultBuilder) Value() string { return d.value }
 
-// Parent obtains the parent stored by the `DefaultBuilder`
+// Parent obtains the parent stored by the DefaultBuilder
 func (d *DefaultBuilder) Parent() string { return d.parent }
 
-// Pop a value at some index from the `BuilderList`.
-func (b *BuilderList) Pop(index int) {
-	base := index - 1
+// Cut a value at some index from the BuilderList.
+func (b *BuilderList) Cut(index int) {
 	upper := index + 1
 
 	// index == 0.
-	if base < 0 {
+	if index < 1 {
 		// length of slice == 0.
 		if upper >= len(*b) {
 			*b = BuilderList{}
@@ -64,10 +67,17 @@ func (b *BuilderList) Pop(index int) {
 		return
 	}
 
-	(*b) = append((*b)[:base], (*b)[upper:]...)
+	(*b) = append((*b)[:index], (*b)[upper:]...)
 }
 
-func (b *BuilderList) NewHierarchy(ctx context.Context, rootValue ...string) (h *Node, err error) {
+// NewHierarchy generates a Hierarchy from a BuilderList.
+func (b *BuilderList) NewHierarchy(ctx context.Context) (h *Hierarchy, err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("%w: %v", ErrBuildHierarchy, err)
+		}
+	}()
+
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%w: %v", ErrPanicked, r)
@@ -79,25 +89,20 @@ func (b *BuilderList) NewHierarchy(ctx context.Context, rootValue ...string) (h 
 		}
 	}()
 
-	rVal := DefaultRootValue
-	if len(rootValue) == 1 {
-		rVal = rootValue[0]
-	}
-
 	cache := make(map[string]struct{})
 	select {
 	case <-ctx.Done():
-		err = fmt.Errorf("build hierarchy: %w", ctx.Err())
+		err = ctx.Err()
 		return
 	default:
 		if len(*b) < 1 {
-			err = ErrEmptyHierarchyBuildSrc
+			err = ErrEmptyHierarchySrc
 			return
 		}
 
 		rootIndex := 0
 		for index := range *b {
-			if (*b)[index].Parent() != rVal {
+			if (*b)[index].Parent() != "" {
 				continue
 			}
 
@@ -107,7 +112,7 @@ func (b *BuilderList) NewHierarchy(ctx context.Context, rootValue ...string) (h 
 				return
 			}
 			id := (*b)[index].Value()
-			h, cache[id] = New(ctx, id, rVal), struct{}{}
+			h, cache[id] = New(id), struct{}{}
 
 			rootIndex = index
 		}
@@ -119,7 +124,7 @@ func (b *BuilderList) NewHierarchy(ctx context.Context, rootValue ...string) (h 
 		// Remove the root node.
 		prevLen := len(*b)
 		fLogger.Debugf("BuilderList: %+v\n", *b)
-		b.Pop(rootIndex)
+		b.Cut(rootIndex)
 		fLogger.Debugf("BuilderList (less root): %+v\n", *b)
 
 		for {
@@ -129,7 +134,7 @@ func (b *BuilderList) NewHierarchy(ctx context.Context, rootValue ...string) (h 
 			}
 
 			if lenSrc == prevLen {
-				err = ErrLocateParents
+				err = fmt.Errorf("%w for: %s", ErrLocateParents, spew.Sprint(b))
 				return
 			}
 			prevLen = lenSrc
@@ -143,28 +148,27 @@ func (b *BuilderList) NewHierarchy(ctx context.Context, rootValue ...string) (h 
 					continue
 				}
 
-				var parent *Node
+				var parent *Hierarchy
 				if parent, err = h.Locate(ctx, parentID); err != nil {
 					if errors.Is(err, ErrNotFound) {
 						// Inconsistency between the cache & hierarchy.
-						err = fmt.Errorf("%w: %v", ErrInvalidBuildCache, err)
+						err = fmt.Errorf("%w: %v", ErrInconsistentBuildCache, err)
 					}
-					err = fmt.Errorf("build hierarchy: %w", err)
 
 					return
 				}
 
 				childID := node.Value()
-				if err = parent.AddChild(ctx, New(ctx, childID, rVal)); err != nil {
+				if err = parent.AddChild(ctx, New(childID)); err != nil {
 					return
 				}
 				cache[childID] = struct{}{}
 
-				b.Pop(index)
+				b.Cut(index)
 
-				// Allow for unordered `BuilderList`s.
+				// Allow for unordered BuilderLists.
 				//
-				// Adds extraneous opcodes compared to the ordered `BuilderList`'s operations
+				// Adds extraneous opcodes compared to the ordered BuilderList's operations
 				// commented below.
 				break
 

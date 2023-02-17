@@ -5,36 +5,53 @@ import (
 	"context"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
-	"gitlab.com/fisherprime/hierarchy/lexer"
+	"github.com/sirupsen/logrus"
+	"gitlab.com/fisherprime/hierarchy/lexer/v2"
 )
 
 func TestDeserialize(t *testing.T) {
 	type args struct {
-		ctx   context.Context
-		input string
-		opts  lexer.Opts
+		ctx  context.Context
+		opts []lexer.Option
 	}
+
+	logger := logrus.New()
 
 	tests := []struct {
 		name    string
 		args    args
-		wantH   *Hierarchy
+		wantH   *Hierarchy[int]
 		wantErr bool
 	}{
 		{
 			name: "valid",
 			args: args{
 				context.Background(),
-				"2,3))",
-				lexer.Opts{Logger: fLogger},
+				[]lexer.Option{lexer.WithLogger(logger), lexer.WithSource(strings.NewReader("2,3))"))},
 			},
-			wantH: &Hierarchy{
-				value: "2",
-				children: childMap{"3": &Hierarchy{
-					value: "3", children: childMap{},
+			wantH: &Hierarchy[int]{
+				value: 2,
+				children: children[int]{3: &Hierarchy[int]{
+					value: 3, children: children[int]{},
 				}},
+				opts: DefOpts(),
+			},
+			// wantErr: true,
+		}, {
+			name: "valid (excessive whitespace)",
+			args: args{
+				context.Background(),
+				[]lexer.Option{lexer.WithLogger(logger), lexer.WithSource(strings.NewReader(" 2 ,     3 )    )         "))},
+			},
+			wantH: &Hierarchy[int]{
+				value: 2,
+				children: children[int]{3: &Hierarchy[int]{
+					value: 3, children: children[int]{},
+				}},
+				opts: DefOpts(),
 			},
 			// wantErr: true,
 		},
@@ -42,19 +59,19 @@ func TestDeserialize(t *testing.T) {
 			name: "invalid (missing end delimiter)",
 			args: args{
 				context.Background(),
-				"2,3,4))",
-				lexer.Opts{Logger: fLogger},
+				[]lexer.Option{lexer.WithLogger(logger), lexer.WithSource(strings.NewReader("2,3,4))"))},
 			},
-			wantH: &Hierarchy{
-				value: "2",
-				children: childMap{
-					"3": &Hierarchy{
-						value: "3", children: childMap{},
+			wantH: &Hierarchy[int]{
+				value: 2,
+				children: children[int]{
+					3: &Hierarchy[int]{
+						value: 3, children: children[int]{},
 					},
-					"4": &Hierarchy{
-						value: "4", children: childMap{},
+					4: &Hierarchy[int]{
+						value: 4, children: children[int]{},
 					},
 				},
+				opts: DefOpts(),
 			},
 			wantErr: true,
 		},
@@ -62,7 +79,7 @@ func TestDeserialize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotH, err := Deserialize(tt.args.ctx, tt.args.opts, tt.args.input)
+			gotH, err := Deserialize[int](tt.args.ctx, tt.args.opts...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deserialize() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -83,8 +100,8 @@ func TestDeserialize(t *testing.T) {
 			}
 			wantNodes = append(wantNodes, tt.wantH.value)
 
-			sort.Strings(gotNodes)
-			sort.Strings(wantNodes)
+			sort.Ints(gotNodes)
+			sort.Ints(wantNodes)
 			t.Logf("gotNodes: %+v, wantNodes: %+v\n", gotNodes, wantNodes)
 
 			if !reflect.DeepEqual(gotNodes, wantNodes) {

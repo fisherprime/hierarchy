@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: NONE
+// SPDX-License-Identifier: MIT
 package hierarchy
 
 import (
@@ -9,35 +9,35 @@ import (
 
 func TestBuilderList_NewHierarchy(t *testing.T) {
 	type args struct {
-		ctx       context.Context
-		rootValue []string
+		ctx context.Context
 	}
 
 	tests := []struct {
 		name    string
 		b       BuilderList
 		args    args
-		wantH   *Node
+		wantH   *Hierarchy
 		wantErr bool
 	}{
 		{
 			name:  "valid",
-			b:     BuilderList{&DefaultBuilder{value: "1", parent: "0"}},
-			args:  args{context.Background(), []string{"0"}},
-			wantH: &Node{value: "1", rootValue: "0"},
+			b:     BuilderList{&DefaultBuilder{value: "1", parent: ""}},
+			args:  args{context.Background()},
+			wantH: &Hierarchy{value: "1", children: childMap{}},
 			// wantErr: true,
 		},
 		{
-			name:    "missing root node",
+			name:    "invalid (missing root node)",
 			b:       BuilderList{&DefaultBuilder{value: "1", parent: "3"}},
-			args:    args{context.Background(), []string{"0"}},
+			args:    args{context.Background()},
 			wantH:   nil,
 			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotH, err := tt.b.NewHierarchy(tt.args.ctx, tt.args.rootValue...)
+			gotH, err := tt.b.NewHierarchy(tt.args.ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("BuilderList.NewHierarchy() error = %v, wantErr %v", err, tt.wantErr)
 				return
