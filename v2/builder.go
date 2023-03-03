@@ -20,7 +20,7 @@ type (
 
 	// BuildSource is a wrapper type for []Builder used to generate the Hierarchy.
 	BuildSource[T Constraint] struct {
-		cfg Config
+		cfg *Config
 
 		builders  []Builder[T]
 		isOrdered bool
@@ -55,7 +55,7 @@ func (d *DefaultBuilder) Parent() string { return d.parent }
 // NewBuildSource instantiates a BuildSource.
 func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
 	b := &BuildSource[T]{
-		cfg:       *DefConfig(),
+		cfg:       DefConfig(),
 		builders:  []Builder[T]{},
 		isOrdered: false,
 	}
@@ -69,7 +69,7 @@ func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
 
 // WithBuildConfig configures the [BuildSource]'s [Config].
 func WithBuildConfig[T Constraint](cfg *Config) BuildOption[T] {
-	return func(b *BuildSource[T]) { b.cfg = *cfg }
+	return func(b *BuildSource[T]) { b.cfg = cfg }
 }
 
 // WithBuilders configures the underlying list.
@@ -106,7 +106,10 @@ func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error)
 		}
 
 		if err != nil {
-			b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
+			// Avoid unneccesary calls.
+			if b.cfg.Debug {
+				b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
+			}
 			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
 		}
 	}()
@@ -147,9 +150,13 @@ func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error)
 
 		// Remove the root node from the build source..
 		prevLen := b.Len()
-		b.cfg.Logger.Debugf("source: %+v\n", *b)
+		if b.cfg.Debug {
+			b.cfg.Logger.Debugf("source: %+v\n", *b)
+		}
 		b.Cut(rootIndex)
-		b.cfg.Logger.Debugf("source (without root): %+v\n", *b)
+		if b.cfg.Debug {
+			b.cfg.Logger.Debugf("source (without root): %+v\n", *b)
+		}
 
 		for {
 			lenSrc := b.Len()

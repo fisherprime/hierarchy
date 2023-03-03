@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/sirupsen/logrus v1.9.0
-	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
 )
 
-require golang.org/x/sys v0.5.0 // indirect
+require golang.org/x/sys v0.1.0 // indirect

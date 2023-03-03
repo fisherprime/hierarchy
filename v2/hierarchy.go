@@ -43,6 +43,9 @@ type (
 
 	// Config defines configuration options for the [BuildSource] & [Hierarchy]'s operations.
 	Config struct {
+		// Logger for [Hierarchy] messages.
+		//
+		// Preferring a public field to allow for sharing.
 		Logger logrus.FieldLogger
 		Debug  bool
 	}
@@ -65,6 +68,7 @@ type (
 
 const (
 	traverseBufferSize = 10
+	poolSize           = 100
 
 	notChildErrFmt = "(%v) %w (%v)"
 )
@@ -143,8 +147,8 @@ func (h *Hierarchy[T]) AddChild(ctx context.Context, child *Hierarchy[T]) (err e
 
 // AddChildTo to a Hierarchy.
 func (h *Hierarchy[T]) AddChildTo(ctx context.Context, parentID T, child *Hierarchy[T]) (err error) {
-	var parent *Hierarchy[T]
-	if parent, err = h.Locate(ctx, parentID); err != nil {
+	parent, err := h.Locate(ctx, parentID)
+	if err != nil {
 		return fmt.Errorf("parent (%v) %w", parentID, err)
 	}
 
@@ -182,12 +186,12 @@ func (h *Hierarchy[T]) Children(ctx context.Context) (children []T) {
 // NOTE: This operation is expensive.
 func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error) {
 	children = make([]T, 0)
-	hierChan := make(chan TraverseComm[T], traverseBufferSize)
+	traverseChan := make(chan TraverseComm[T], traverseBufferSize)
 
-	go h.Walk(ctx, hierChan)
+	go h.Walk(ctx, traverseChan)
 
 	for {
-		resl, proceed := <-hierChan
+		resl, proceed := <-traverseChan
 		if !proceed {
 			break
 		}
@@ -199,13 +203,17 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error
 		children = append(children, resl.node.value)
 	}
 
-	h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
+	if h.cfg.Debug {
+		h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
+	}
 
 	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
 
-		h.cfg.Logger.Debugf("children: %+v", children)
+		if h.cfg.Debug {
+			h.cfg.Logger.Debugf("children: %+v", children)
+		}
 	}
 
 	if len(children) < 1 {
@@ -220,13 +228,13 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error
 // NOTE: This operation is expensive.
 func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children [][]T, err error) {
 	children = make([][]T, 0)
-	hierChan := make(chan TraverseComm[T], traverseBufferSize)
+	traverseChan := make(chan TraverseComm[T], traverseBufferSize)
 
-	go h.Walk(ctx, hierChan)
+	go h.Walk(ctx, traverseChan)
 
 	var peers []T
 	for {
-		resl, proceed := <-hierChan
+		resl, proceed := <-traverseChan
 		if !proceed {
 			break
 		}
@@ -249,12 +257,17 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children [][]T, 
 		children = append(children, peers)
 	}
 
-	h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
+	if h.cfg.Debug {
+		h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
+	}
 
 	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
-		h.cfg.Logger.Debugf("children: %+v", children)
+
+		if h.cfg.Debug {
+			h.cfg.Logger.Debugf("children: %+v", children)
+		}
 	}
 
 	if len(children) < 1 {
@@ -287,12 +300,12 @@ func (h *Hierarchy[T]) AllChildrenOfByLevel(ctx context.Context, parentID T) (ch
 // LeafNodes returns an array of terminal Hierarchy(ies).
 func (h *Hierarchy[T]) LeafNodes(ctx context.Context) (termNodes List[T], err error) {
 	termNodes = make(List[T], 0)
-	hierChan := make(chan TraverseComm[T], traverseBufferSize)
+	traverseChan := make(chan TraverseComm[T], traverseBufferSize)
 
-	go h.Walk(ctx, hierChan)
+	go h.Walk(ctx, traverseChan)
 
 	for {
-		resl, proceed := <-hierChan
+		resl, proceed := <-traverseChan
 		if !proceed {
 			break
 		}
@@ -329,8 +342,8 @@ func (h *Hierarchy[T]) Leaves(ctx context.Context) (termValues []T, err error) {
 
 // ParentTo returns the parent Hierarchy for some node identified by its id.
 func (h *Hierarchy[T]) ParentTo(ctx context.Context, childID T) (parent *Hierarchy[T], err error) {
-	var node *Hierarchy[T]
-	if node, err = h.Locate(ctx, childID); err != nil {
+	node, err := h.Locate(ctx, childID)
+	if err != nil {
 		err = fmt.Errorf("(%v) %w", childID, err)
 		return
 	}
@@ -343,66 +356,65 @@ func (h *Hierarchy[T]) ParentTo(ctx context.Context, childID T) (parent *Hierarc
 
 // Locate searches for an id & returns it's Hierarchy.
 func (h *Hierarchy[T]) Locate(ctx context.Context, id T) (node *Hierarchy[T], err error) {
-	select {
-	case <-ctx.Done():
-		err = ctx.Err()
-		return
-	default:
-		if h.Value() == id {
-			return h, nil
-		}
-
-		hierChan := make(chan TraverseComm[T])
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-		go h.locate(ctx, id, hierChan, wg)
-		go func() {
-			wg.Wait()
-			close(hierChan)
-		}()
-
-		resl, proceed := <-hierChan
-		if !proceed {
-			err = ErrNotFound
-			return
-		}
-
-		if node, err = resl.node, resl.err; node != nil {
-			return
-		}
-
-		err = ErrNotFound
+	if h.Value() == id {
+		return h, nil
 	}
+
+	traverseChan := make(chan TraverseComm[T])
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+
+	locateCtx, locateCancel := context.WithCancel(ctx)
+	defer locateCancel()
+
+	go h.locate(locateCtx, id, traverseChan, wg)
+	go func() {
+		wg.Wait()
+		close(traverseChan)
+	}()
+
+	resl, proceed := <-traverseChan
+	if !proceed {
+		err = ErrNotFound
+		return
+	}
+	locateCancel()
+
+	if node, err = resl.node, resl.err; node != nil {
+		return
+	}
+
+	err = ErrNotFound
 
 	return
 }
 
-func (h *Hierarchy[T]) locate(ctx context.Context, id T, hierChan chan TraverseComm[T], wg *sync.WaitGroup) {
+func (h *Hierarchy[T]) locate(ctx context.Context, id T, traverseChan chan TraverseComm[T], wg *sync.WaitGroup) {
 	defer wg.Done()
 	// h.cfg.Logger.Debugf("locate val %s in %+v", id, h)
+
+	if h.value == id {
+		traverseChan <- TraverseComm[T]{node: h}
+		return
+	}
+
+	if len(h.children) < 1 {
+		return
+	}
+
+	if node, ok := h.children[id]; ok {
+		traverseChan <- TraverseComm[T]{node: node}
+		return
+	}
 
 	select {
 	case <-ctx.Done():
 		return
 	default:
-		if h.value == id {
-			hierChan <- TraverseComm[T]{node: h}
-			return
-		}
-
-		if len(h.children) < 1 {
-			return
-		}
-
-		if node, ok := h.children[id]; ok {
-			hierChan <- TraverseComm[T]{node: node}
-			return
-		}
-
 		internalWG := new(sync.WaitGroup)
 		internalWG.Add(len(h.children))
 		for _, v := range h.children {
-			go v.locate(ctx, id, hierChan, internalWG)
+			go v.locate(ctx, id, traverseChan, internalWG)
 		}
 		internalWG.Wait()
 	}
@@ -410,8 +422,8 @@ func (h *Hierarchy[T]) locate(ctx context.Context, id T, hierChan chan TraverseC
 
 // ChildTo searches for the child to some parent & returns it's Hierarchy.
 func (h *Hierarchy[T]) ChildTo(ctx context.Context, parentID, childID T) (child *Hierarchy[T], err error) {
-	var parent *Hierarchy[T]
-	if parent, err = h.Locate(ctx, parentID); err != nil {
+	parent, err := h.Locate(ctx, parentID)
+	if err != nil {
 		err = fmt.Errorf("parent (%v) %w", parentID, err)
 		return
 	}
@@ -428,41 +440,43 @@ func (h *Hierarchy[T]) ChildTo(ctx context.Context, parentID, childID T) (child 
 //
 // This operation uses channels to minimize resource wastage.
 // A context.Context is used to terminate the walk operation.
-func (h *Hierarchy[T]) Walk(ctx context.Context, hierChan chan TraverseComm[T]) {
-	defer close(hierChan)
+func (h *Hierarchy[T]) Walk(ctx context.Context, traverseChan chan TraverseComm[T]) {
+	defer close(traverseChan)
+
+	// Default operation is to walk.
+	if h == nil {
+		return
+	}
+
+	// Level order traversal.
+	queue := List[T]{h}
 
 	select {
 	case <-ctx.Done():
 		// Received context cancelation.
 		return
 	default:
-		// Default operation is to walk.
-		if h == nil {
-			return
-		}
-
-		// Level order traversal.
-		queue := List[T]{h}
+		// Use a var for front to ensure the outer scope queue is modified.
+		var front *Hierarchy[T]
 
 		for {
-			qLen := len(queue)
-			if qLen < 1 {
+			queueLen := len(queue)
+			if queueLen < 1 {
 				break
 			}
 
 			// Iterate over the node's children.
 			newPeers := true
-			for qLen > 0 {
+			for queueLen > 0 {
 				// Pop from queue.
-				var front *Hierarchy[T]
 				front, queue = queue[0], queue[1:]
-				qLen--
+				queueLen--
 
 				// Debug: this operation is noisy.
 				// h.cfg.Logger.Debugf("front: %+v, peers: %+v", front, newPeers)
 
 				// Send node to caller via the channel.
-				hierChan <- TraverseComm[T]{node: front, newPeers: newPeers}
+				traverseChan <- TraverseComm[T]{node: front, newPeers: newPeers}
 				newPeers = false
 
 				// Add children to the queue.
