@@ -106,7 +106,7 @@ func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error)
 		}
 
 		if err != nil {
-			// Avoid unneccesary calls.
+			// Avoid unnecessary calls.
 			if b.cfg.Debug {
 				b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
 			}
