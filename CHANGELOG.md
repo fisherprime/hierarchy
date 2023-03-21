@@ -8,6 +8,7 @@ All notable changes to RBAC will be documented in this file.
 
 - Add tool configs & githooks
 - Update dependencies
+- Update dependencies
 
 ### Performance
 
