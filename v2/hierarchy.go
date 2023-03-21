@@ -39,6 +39,9 @@ type (
 
 		// children holds references to nodes at a lower level.
 		children children[T]
+
+		// locateCache holds references to located nodes at a lower level.
+		locateCache children[T]
 	}
 
 	// Config defines configuration options for the [BuildSource] & [Hierarchy]'s operations.
@@ -83,6 +86,10 @@ var (
 	ErrNotChild     = errors.New("is not a child of")
 )
 
+var (
+	defConfig = DefConfig()
+)
+
 // DefConfig obtains the package's  Hierarchy default options.
 func DefConfig() *Config {
 	return &Config{
@@ -94,7 +101,7 @@ func DefConfig() *Config {
 // New instantiates a Hierarchy node.
 func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 	h := &Hierarchy[T]{
-		cfg:      DefConfig(),
+		cfg:      defConfig,
 		value:    value,
 		children: make(children[T]),
 	}
@@ -109,6 +116,11 @@ func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 // WithConfig configures the Hierarchy [Config].
 func WithConfig[T Constraint](cfg *Config) Option[T] {
 	return func(h *Hierarchy[T]) { h.cfg = cfg }
+}
+
+// WithLocateCache enables the usage of a cache for [hierarchy.Locate] operations.
+func WithLocateCache[T Constraint]() Option[T] {
+	return func(h *Hierarchy[T]) { h.locateCache = make(children[T]) }
 }
 
 // Config retrieves the Hierarchy's Opts.
@@ -356,7 +368,7 @@ func (h *Hierarchy[T]) ParentTo(ctx context.Context, childID T) (parent *Hierarc
 
 // Locate searches for an id & returns it's Hierarchy.
 func (h *Hierarchy[T]) Locate(ctx context.Context, id T) (node *Hierarchy[T], err error) {
-	if h.Value() == id {
+	if h.value == id {
 		return h, nil
 	}
 
@@ -381,6 +393,10 @@ func (h *Hierarchy[T]) Locate(ctx context.Context, id T) (node *Hierarchy[T], er
 	locateCancel()
 
 	if node, err = resl.node, resl.err; node != nil {
+		if h.locateCache != nil {
+			h.locateCache[node.value] = node
+		}
+
 		return
 	}
 
@@ -400,6 +416,13 @@ func (h *Hierarchy[T]) locate(ctx context.Context, id T, traverseChan chan Trave
 
 	if len(h.children) < 1 {
 		return
+	}
+
+	if h.locateCache != nil {
+		if node, ok := h.locateCache[id]; ok {
+			traverseChan <- TraverseComm[T]{node: node}
+			return
+		}
 	}
 
 	if node, ok := h.children[id]; ok {

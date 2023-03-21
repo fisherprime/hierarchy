@@ -61,7 +61,7 @@ var (
 	ErrNotChild     = errors.New("is not a child of")
 )
 
-var fLogger logrus.FieldLogger = logrus.NewEntry(logrus.New())
+var fLogger logrus.FieldLogger = logrus.New()
 
 // SetLogger configures a logrus.FieldLogger for the package.
 func SetLogger(l logrus.FieldLogger) { fLogger = l }

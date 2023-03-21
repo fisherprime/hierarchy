@@ -55,7 +55,7 @@ func (d *DefaultBuilder) Parent() string { return d.parent }
 // NewBuildSource instantiates a BuildSource.
 func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
 	b := &BuildSource[T]{
-		cfg:       DefConfig(),
+		cfg:       defConfig,
 		builders:  []Builder[T]{},
 		isOrdered: false,
 	}
@@ -93,7 +93,7 @@ func (b *BuildSource[T]) Cut(index int) {
 }
 
 // Build generates a hierarchy from a Source.
-func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error) {
+func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hierarchy[T], err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("%w: %v", ErrBuildHierarchy, err)
@@ -120,7 +120,7 @@ func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error)
 	}
 
 	var rootValue T
-	cache := make(map[T]struct{})
+	buildCache := make(map[T]struct{})
 
 	select {
 	case <-ctx.Done():
@@ -139,7 +139,7 @@ func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error)
 				return
 			}
 			id := b.builders[index].Value()
-			h, cache[id] = New(id), struct{}{}
+			h, buildCache[id] = New(id, options...), struct{}{}
 
 			rootIndex = index
 		}
@@ -175,7 +175,7 @@ func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error)
 				parentID := node.Parent()
 
 				// Parent not in hierarchy.
-				if _, ok := cache[parentID]; !ok {
+				if _, ok := buildCache[parentID]; !ok {
 					continue
 				}
 
@@ -190,10 +190,10 @@ func (b *BuildSource[T]) Build(ctx context.Context) (h *Hierarchy[T], err error)
 				}
 
 				childID := node.Value()
-				if err = parent.AddChild(ctx, New(childID)); err != nil {
+				if err = parent.AddChild(ctx, New(childID, options...)); err != nil {
 					return
 				}
-				cache[childID] = struct{}{}
+				buildCache[childID] = struct{}{}
 
 				// Remove added node from the build source.
 				b.Cut(index)
