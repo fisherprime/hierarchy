@@ -12,41 +12,42 @@ import (
 
 // Serialize transforms a Hierarchy into a string.
 func (h *Hierarchy[T]) Serialize(ctx context.Context, cfg *lexer.Config) (output string, err error) {
+	cfg.Validate()
+
+	serChan := make(chan string)
+	go func() {
+		h.serialize(ctx, cfg, serChan)
+		close(serChan)
+	}()
+
+	// Handle root Hierarchy.
+	fValue, fProceed := <-serChan
+	if !fProceed {
+		return
+	}
+	var buffer strings.Builder
+	if _, err = buffer.WriteString(fValue); err != nil {
+		// Invalidate serialization output.
+		return
+	}
+
 	select {
 	case <-ctx.Done():
+		err = ctx.Err()
 		return
 	default:
-		cfg.Validate()
-
-		serChan := make(chan string)
-		go func() {
-			h.serialize(ctx, cfg, serChan)
-			close(serChan)
-		}()
-
-		// Handle root Hierarchy.
-		fVal, fProceed := <-serChan
-		if !fProceed {
-			return
-		}
-		var buffer strings.Builder
-		if _, err = buffer.WriteString(fVal); err != nil {
-			// Invalidate serialization output.
-			return
-		}
-
 		for {
-			val, proceed := <-serChan
+			value, proceed := <-serChan
 			if !proceed {
 				break
 			}
 
-			if val != string(cfg.EndMarker) {
+			if value != string(cfg.EndMarker) {
 				if _, err = buffer.WriteString(string(cfg.Splitter)); err != nil {
 					return
 				}
 			}
-			if _, err = buffer.WriteString(val); err != nil {
+			if _, err = buffer.WriteString(value); err != nil {
 				// Invalidate serialization output.
 				return
 			}
@@ -78,11 +79,12 @@ func (h *Hierarchy[T]) serialize(ctx context.Context, cfg *lexer.Config, serChan
 	}
 	sort.Sort(&sortedChildren)
 
-	for _, child := range sortedChildren {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+	select {
+	case <-ctx.Done():
+		// NOTE: context error captured in [Hierarchy.Serialize].
+		return
+	default:
+		for _, child := range sortedChildren {
 			child.serialize(ctx, cfg, serChan)
 		}
 	}

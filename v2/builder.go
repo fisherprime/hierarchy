@@ -10,7 +10,7 @@ import (
 )
 
 type (
-	// Builder defines an interface for entities that can be read into a Hierarchy.
+	// Builder defines an interface for entities that can be read into a [Hierarchy].
 	Builder[T Constraint] interface {
 		// Value obtains the value stored by the Builder.
 		Value() T
@@ -18,7 +18,7 @@ type (
 		Parent() T
 	}
 
-	// BuildSource is a wrapper type for []Builder used to generate the Hierarchy.
+	// BuildSource is a wrapper type for [][Builder] used to generate the [Hierarchy].
 	BuildSource[T Constraint] struct {
 		cfg *Config
 
@@ -46,13 +46,13 @@ var (
 	ErrPanicked = errors.New("recovery from panic")
 )
 
-// Value obtains the value stored by the DefaultBuilder.
+// Value obtains the value stored by the [DefaultBuilder].
 func (d *DefaultBuilder) Value() string { return d.value }
 
-// Parent obtains the parent stored by the DefaultBuilder
+// Parent obtains the parent stored by the [DefaultBuilder]
 func (d *DefaultBuilder) Parent() string { return d.parent }
 
-// NewBuildSource instantiates a BuildSource.
+// NewBuildSource instantiates a [BuildSource].
 func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
 	b := &BuildSource[T]{
 		cfg:       defConfig,
@@ -77,10 +77,18 @@ func WithBuilders[T Constraint](builders []Builder[T]) BuildOption[T] {
 	return func(b *BuildSource[T]) { b.builders = builders }
 }
 
-// Len retrieves the length of the BuildSource.
+// IsOrdered configures the [BuildSource] as ordered; all parent [Builder.Value] are less than their
+// respective child's [Builder.Value].
+//
+// Unordered [BuildSource]'s have a [Hierarchy] build-time performance penalty.
+func IsOrdered[T Constraint]() BuildOption[T] {
+	return func(b *BuildSource[T]) { b.isOrdered = true }
+}
+
+// Len retrieves the length of the [BuildSource].
 func (b *BuildSource[T]) Len() int { return len(b.builders) }
 
-// Cut a value at some index from the BuildSource.
+// Cut a value at some index from the [BuildSource].
 func (b *BuildSource[T]) Cut(index int) {
 	if index == 0 {
 		b.builders = b.builders[1:]
@@ -92,14 +100,8 @@ func (b *BuildSource[T]) Cut(index int) {
 	b.builders = append(b.builders[:index], b.builders[upper:]...)
 }
 
-// Build generates a hierarchy from a Source.
+// Build generates a [Hierarchy] from a [BuildSource].
 func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hierarchy[T], err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("%w: %v", ErrBuildHierarchy, err)
-		}
-	}()
-
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%w: %v", ErrPanicked, r)
@@ -110,7 +112,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 			if b.cfg.Debug {
 				b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
 			}
-			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
+			err = fmt.Errorf("%w: %w: %v", ErrBuildHierarchy, ErrInvalidHierarchySrc, err)
 		}
 	}()
 
@@ -198,9 +200,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 				// Remove added node from the build source.
 				b.Cut(index)
 
-				// Allow for unordered Sources.
-				//
-				// Adds extraneous opcodes compared to the ordered Source's operation.
+				// Break to outer for loop.
 				if !b.isOrdered {
 					break
 				}

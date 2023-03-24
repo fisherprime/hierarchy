@@ -20,20 +20,21 @@ var (
 //
 // An invalid entry will result in a truncated Hierarchy.
 func Deserialize[T Constraint](ctx context.Context, opts ...lexer.Option) (h *Hierarchy[T], err error) {
+	l := lexer.New(opts...)
+	go l.Lex(ctx)
+
+	var v T
+	h = New(v)
+	if _, err = h.deserialize(ctx, l); err != nil {
+		err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
+		return
+	}
+
 	select {
 	case <-ctx.Done():
+		err = ctx.Err()
 		return
 	default:
-		l := lexer.New(opts...)
-		go l.Lex(ctx)
-
-		var v T
-		h = New(v)
-		if _, err = h.deserialize(ctx, l); err != nil {
-			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
-			return
-		}
-
 		diff := l.ValueCounter() - l.EndCounter()
 		switch {
 		case diff > 0:
@@ -63,41 +64,44 @@ func Deserialize[T Constraint](ctx context.Context, opts ...lexer.Option) (h *Hi
 func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, err error) {
 	var rootValue T
 
+	item, proceed := l.Item()
+	if !proceed {
+		end = true
+		return
+	}
+
+	l.Logger().Debugf("lexed item: %+v", item)
+
+	switch item.ID {
+	case lexer.ItemEOF:
+		end = true
+		return
+	case lexer.ItemError:
+		// Stop input processing.
+		end = true
+		err = item.Err
+		return
+	case lexer.ItemEndMarker:
+		end = true
+		return
+	case lexer.ItemSplitter:
+		return
+	}
+
+	// Alternative to decoding runes.
+	var value T
+	if err = json.Unmarshal(item.Val, &value); err != nil {
+		return
+	}
+
 	select {
 	case <-ctx.Done():
 		end = true
+		err = ctx.Err()
+
 		return
 	default:
-		item, proceed := l.Item()
-		if !proceed {
-			end = true
-			return
-		}
-
-		l.Logger().Debugf("lexed item: %+v", item)
-
-		switch item.ID {
-		case lexer.ItemEOF:
-			end = true
-			return
-		case lexer.ItemError:
-			// Stop input processing.
-			end = true
-			err = item.Err
-			return
-		case lexer.ItemEndMarker:
-			end = true
-			return
-		case lexer.ItemSplitter:
-			return
-		}
-
-		var dest T
-		if err = json.Unmarshal(item.Val, &dest); err != nil {
-			return
-		}
-
-		*h = *New(dest)
+		h.value = value
 		for {
 			var endChildren bool
 

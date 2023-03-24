@@ -58,7 +58,7 @@ type (
 	// List is a type wrapper for []*Hierarchy.
 	List[T Constraint] []*Hierarchy[T]
 
-	// TraverseComm defines a channel to communicate info between Hierarchy operations & it's callers.
+	// TraverseComm defines a channel to communicate info between [Hierarchy] operations & it's callers.
 	TraverseComm[T Constraint] struct {
 		node     *Hierarchy[T]
 		err      error
@@ -90,7 +90,7 @@ var (
 	defConfig = DefConfig()
 )
 
-// DefConfig obtains the package's  Hierarchy default options.
+// DefConfig obtains the package's [Hierarchy] default options.
 func DefConfig() *Config {
 	return &Config{
 		Logger: logrus.New(),
@@ -98,7 +98,7 @@ func DefConfig() *Config {
 	}
 }
 
-// New instantiates a Hierarchy node.
+// New instantiates a [Hierarchy].
 func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 	h := &Hierarchy[T]{
 		cfg:      defConfig,
@@ -113,41 +113,41 @@ func New[T Constraint](value T, options ...Option[T]) *Hierarchy[T] {
 	return h
 }
 
-// WithConfig configures the Hierarchy [Config].
+// WithConfig configures the [Hierarchy] [Config].
 func WithConfig[T Constraint](cfg *Config) Option[T] {
 	return func(h *Hierarchy[T]) { h.cfg = cfg }
 }
 
-// WithLocateCache enables the usage of a cache for [hierarchy.Locate] operations.
-func WithLocateCache[T Constraint]() Option[T] {
+// UseLocateCache enables the usage of a cache for [hierarchy.Locate] operations.
+func UseLocateCache[T Constraint]() Option[T] {
 	return func(h *Hierarchy[T]) { h.locateCache = make(children[T]) }
 }
 
-// Config retrieves the Hierarchy's Opts.
+// Config retrieves the [Hierarchy]'s Opts.
 func (h *Hierarchy[T]) Config() *Config { return h.cfg }
 
-// Value retrieves the Hierarchy's data.
+// Value retrieves the [Hierarchy]'s data.
 func (h *Hierarchy[T]) Value() T { return h.value }
 
-// Parent retrieves a reference to the Hierarchy's parent.
+// Parent retrieves a reference to the [Hierarchy]'s parent.
 //
 // Value is nil for the root node.
 func (h *Hierarchy[T]) Parent() *Hierarchy[T] { return h.parent }
 
-// SetParent for a Hierarchy.
+// SetParent for a [Hierarchy].
 func (h *Hierarchy[T]) SetParent(parent *Hierarchy[T]) { h.parent = parent }
 
-// HasChild checks for the existence of an immediate child.
-func (h *Hierarchy[T]) HasChild(_ context.Context, childID T) (ok bool) {
-	_, ok = h.children[childID]
+// Child retrieves an immediate child.
+func (h *Hierarchy[T]) Child(_ context.Context, childID T) (child *Hierarchy[T], ok bool) {
+	child, ok = h.children[childID]
 	return
 }
 
-// AddChild to a Hierarchy.
+// AddChild to a [Hierarchy].
 //
 // Throws an error on existing child.
 func (h *Hierarchy[T]) AddChild(ctx context.Context, child *Hierarchy[T]) (err error) {
-	if h.HasChild(ctx, child.value) {
+	if _, ok := h.Child(ctx, child.value); ok {
 		return fmt.Errorf("(%v) %w (%v)", child.value, ErrAlreadyChild, h.value)
 	}
 
@@ -157,7 +157,7 @@ func (h *Hierarchy[T]) AddChild(ctx context.Context, child *Hierarchy[T]) (err e
 	return
 }
 
-// AddChildTo to a Hierarchy.
+// AddChildTo to a [Hierarchy].
 func (h *Hierarchy[T]) AddChildTo(ctx context.Context, parentID T, child *Hierarchy[T]) (err error) {
 	parent, err := h.Locate(ctx, parentID)
 	if err != nil {
@@ -167,20 +167,20 @@ func (h *Hierarchy[T]) AddChildTo(ctx context.Context, parentID T, child *Hierar
 	return parent.AddChild(ctx, child)
 }
 
-// PopImmediateChild removes an immediate child to the Hierarchy, returning it's reference.
+// PopImmediateChild removes an immediate child to the [Hierarchy], returning it's reference.
 func (h *Hierarchy[T]) PopChild(ctx context.Context, childID T) (child *Hierarchy[T], err error) {
-	if !h.HasChild(ctx, childID) {
+	child, ok := h.Child(ctx, childID)
+	if !ok {
 		err = fmt.Errorf("child (%v) of (%v): %w", childID, h.value, ErrNotFound)
 		return
 	}
 
-	child = h.children[childID]
 	delete(h.children, childID)
 
 	return
 }
 
-// Children lists the immediate children for a Hierarchy.
+// Children lists the immediate children for a [Hierarchy].
 func (h *Hierarchy[T]) Children(ctx context.Context) (children []T) {
 	children = make([]T, len(h.children))
 
@@ -193,7 +193,7 @@ func (h *Hierarchy[T]) Children(ctx context.Context) (children []T) {
 	return
 }
 
-// AllChildren lists immediate and children-of children for a Hierarchy.
+// AllChildren lists immediate and children-of children for a [Hierarchy].
 //
 // NOTE: This operation is expensive.
 func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error) {
@@ -216,7 +216,7 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error
 	}
 
 	if h.cfg.Debug {
-		h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
+		h.cfg.Logger.Debugf("walked: %+v", children)
 	}
 
 	if len(children) > 0 {
@@ -235,7 +235,7 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children []T, err error
 	return
 }
 
-// AllChildrenByLevel lists immediate and children-of children for a Hierarchy by level.
+// AllChildrenByLevel lists immediate and children-of children for a [Hierarchy] by level.
 //
 // NOTE: This operation is expensive.
 func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children [][]T, err error) {
@@ -270,7 +270,7 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children [][]T, 
 	}
 
 	if h.cfg.Debug {
-		h.cfg.Logger.Debugf("Hierarchy walk: %+v", children)
+		h.cfg.Logger.Debugf("walked: %+v", children)
 	}
 
 	if len(children) > 0 {
@@ -299,7 +299,7 @@ func (h *Hierarchy[T]) AllChildrenOf(ctx context.Context, parentID T) (children 
 	return node.AllChildren(ctx)
 }
 
-// AllChildrenOfByLevel performs the AllChildren operation for some parent in the Hierarchy by level.
+// AllChildrenOfByLevel performs the AllChildren operation for some parent in the [Hierarchy] by level.
 func (h *Hierarchy[T]) AllChildrenOfByLevel(ctx context.Context, parentID T) (children [][]T, err error) {
 	node, err := h.Locate(ctx, parentID)
 	if err != nil {
@@ -309,7 +309,9 @@ func (h *Hierarchy[T]) AllChildrenOfByLevel(ctx context.Context, parentID T) (ch
 	return node.AllChildrenByLevel(ctx)
 }
 
-// LeafNodes returns an array of terminal Hierarchy(ies).
+// LeafNodes returns an array of terminal [Hierarchy](ies).
+//
+// An errir here indicates a cyclic [Hierarchy].
 func (h *Hierarchy[T]) LeafNodes(ctx context.Context) (termNodes List[T], err error) {
 	termNodes = make(List[T], 0)
 	traverseChan := make(chan TraverseComm[T], traverseBufferSize)
@@ -337,7 +339,7 @@ func (h *Hierarchy[T]) LeafNodes(ctx context.Context) (termNodes List[T], err er
 	return
 }
 
-// Leaves returns an array of leaves (terminal node) values as defined in Hierarchy.
+// Leaves returns an array of leaves (terminal node) values as defined in [Hierarchy].
 func (h *Hierarchy[T]) Leaves(ctx context.Context) (termValues []T, err error) {
 	nodes, err := h.LeafNodes(ctx)
 	if err != nil {
@@ -352,7 +354,7 @@ func (h *Hierarchy[T]) Leaves(ctx context.Context) (termValues []T, err error) {
 	return
 }
 
-// ParentTo returns the parent Hierarchy for some node identified by its id.
+// ParentTo returns the parent [Hierarchy] for some node identified by its id.
 func (h *Hierarchy[T]) ParentTo(ctx context.Context, childID T) (parent *Hierarchy[T], err error) {
 	node, err := h.Locate(ctx, childID)
 	if err != nil {
@@ -366,7 +368,7 @@ func (h *Hierarchy[T]) ParentTo(ctx context.Context, childID T) (parent *Hierarc
 	return
 }
 
-// Locate searches for an id & returns it's Hierarchy.
+// Locate searches for an id & returns it's [Hierarchy].
 func (h *Hierarchy[T]) Locate(ctx context.Context, id T) (node *Hierarchy[T], err error) {
 	if h.value == id {
 		return h, nil
@@ -443,7 +445,7 @@ func (h *Hierarchy[T]) locate(ctx context.Context, id T, traverseChan chan Trave
 	}
 }
 
-// ChildTo searches for the child to some parent & returns it's Hierarchy.
+// ChildTo searches for the child to some parent & returns it's [Hierarchy].
 func (h *Hierarchy[T]) ChildTo(ctx context.Context, parentID, childID T) (child *Hierarchy[T], err error) {
 	parent, err := h.Locate(ctx, parentID)
 	if err != nil {
@@ -458,7 +460,7 @@ func (h *Hierarchy[T]) ChildTo(ctx context.Context, parentID, childID T) (child 
 	return
 }
 
-// Walk performs level-order traversal on a Hierarchy, pushing its values to its channel
+// Walk performs breadth-first traversal on a [Hierarchy], pushing its values to its channel
 // argument.
 //
 // This operation uses channels to minimize resource wastage.
