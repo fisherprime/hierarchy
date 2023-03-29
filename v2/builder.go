@@ -96,7 +96,7 @@ func (b *BuildSource[T]) Cut(index int) {
 	}
 
 	upper := index + 1
-	// Cut upto (excluding) `index`, cut from (including) `index+1`.
+	// Cut up to (excluding) `index`, cut from (including) `index+1`.
 	b.builders = append(b.builders[:index], b.builders[upper:]...)
 }
 

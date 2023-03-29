@@ -19,12 +19,11 @@ var (
 // Deserialize transforms a serialized tree into a Hierarchy.
 //
 // An invalid entry will result in a truncated Hierarchy.
-func Deserialize[T Constraint](ctx context.Context, opts ...lexer.Option) (h *Hierarchy[T], err error) {
-	l := lexer.New(opts...)
+func Deserialize[T Constraint](ctx context.Context, l *lexer.Lexer, options ...Option[T]) (h *Hierarchy[T], err error) {
 	go l.Lex(ctx)
 
 	var v T
-	h = New(v)
+	h = New(v, options...)
 	if _, err = h.deserialize(ctx, l); err != nil {
 		err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
 		return
@@ -60,8 +59,8 @@ func Deserialize[T Constraint](ctx context.Context, opts ...lexer.Option) (h *Hi
 
 // deserialize performs the deserialization grunt work.
 //
-// Using json to deserialize the input to the intended type.
-func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer) (end bool, err error) {
+// Using JSON to deserialize the input to the intended type.
+func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer, options ...Option[T]) (end bool, err error) {
 	var rootValue T
 
 	item, proceed := l.Item()
@@ -107,7 +106,7 @@ func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer) (end boo
 
 			// NOTE: Receivers are passed by copy & need to be initialized; a pointer to nil won't
 			// store the results.
-			child := New(rootValue)
+			child := New(rootValue, options...)
 			if endChildren, err = child.deserialize(ctx, l); endChildren || err != nil {
 				// End of children.
 				return

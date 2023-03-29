@@ -15,11 +15,13 @@ import (
 
 func TestDeserialize(t *testing.T) {
 	type args struct {
-		ctx context.Context
-		cfg []lexer.Option
+		ctx     context.Context
+		lexCfg  []lexer.Option
+		hierCfg []Option[int]
 	}
 
 	logger := logrus.New()
+	hierCfg := []Option[int]{WithConfig[int](&Config{Logger: logger})}
 
 	tests := []struct {
 		name    string
@@ -32,6 +34,7 @@ func TestDeserialize(t *testing.T) {
 			args: args{
 				context.Background(),
 				[]lexer.Option{lexer.WithLogger(logger), lexer.WithSource(strings.NewReader("2,3))"))},
+				hierCfg,
 			},
 			wantH: &Hierarchy[int]{
 				value: 2,
@@ -47,6 +50,7 @@ func TestDeserialize(t *testing.T) {
 			args: args{
 				context.Background(),
 				[]lexer.Option{lexer.WithLogger(logger), lexer.WithSource(strings.NewReader(" 2 ,     3 )    )         "))},
+				hierCfg,
 			},
 			wantH: &Hierarchy[int]{
 				value: 2,
@@ -62,6 +66,7 @@ func TestDeserialize(t *testing.T) {
 			args: args{
 				context.Background(),
 				[]lexer.Option{lexer.WithLogger(logger), lexer.WithSource(strings.NewReader("2,3,4))"))},
+				hierCfg,
 			},
 			wantH: &Hierarchy[int]{
 				value: 2,
@@ -81,25 +86,28 @@ func TestDeserialize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotH, err := Deserialize[int](tt.args.ctx, tt.args.cfg...)
+			l := lexer.New(tt.args.lexCfg...)
+			gotH, err := Deserialize(tt.args.ctx, l, tt.args.hierCfg...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deserialize() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			// Comparison of the Hierarchy given the childMap member will always fail.
-			gotNodes, err := gotH.AllChildren(tt.args.ctx)
+			children, err := gotH.AllChildren(tt.args.ctx)
 			if err != nil {
 				t.Errorf("Deserialize()->Hierarchy.AllChildren() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			gotNodes := children.Values(tt.args.ctx)
 			gotNodes = append(gotNodes, gotH.value)
 
-			wantNodes, err := tt.wantH.AllChildren(tt.args.ctx)
+			children, err = tt.wantH.AllChildren(tt.args.ctx)
 			if err != nil {
 				t.Errorf("Deserialize()->Hierarchy.AllChildren() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			wantNodes := children.Values(tt.args.ctx)
 			wantNodes = append(wantNodes, tt.wantH.value)
 
 			sort.Ints(gotNodes)

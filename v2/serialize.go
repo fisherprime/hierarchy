@@ -67,7 +67,7 @@ func (h *Hierarchy[T]) serialize(ctx context.Context, cfg *lexer.Config, serChan
 	}
 	serChan <- fmt.Sprint(h.value)
 
-	// Create a sorted slice to hold the child *Hierarchy(ies) for serialization.
+	// Create a sorted slice to hold the child [Hierarchy](ies) for serialization.
 	//
 	// Using the map directly is not guaranteed to follow the same order yielding valid but
 	// different serialization output.
