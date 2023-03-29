@@ -17,5 +17,6 @@ All notable changes to RBAC will be documented in this file.
 ### Refactor
 
 - Add misc changes
+- Revise methods
 
 <!-- fisher -->
