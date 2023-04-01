@@ -88,9 +88,7 @@ var (
 	ErrNotChild     = errors.New("is not a child of")
 )
 
-var (
-	defConfig = DefConfig()
-)
+var defConfig = DefConfig()
 
 // DefConfig obtains the package's [Hierarchy] default options.
 func DefConfig() *Config {
@@ -178,23 +176,30 @@ func (h *Hierarchy[T]) PopChild(ctx context.Context, childValue T) (child *Hiera
 	}
 
 	delete(h.children, childValue)
+	h.clearLocateCacheEntry(ctx, childValue)
 
-	// Remove entry from the locate cache.
-	cache := h.locateCache
-	node := h
+	return
+}
+
+// clearLocateCacheEntry removes values from the current [Hierarchy] ascending to the root node.
+func (h *Hierarchy[T]) clearLocateCacheEntry(ctx context.Context, values ...T) {
+	if h.locateCache == nil {
+		return
+	}
+
+	node, cache := h, h.locateCache
 	for cache != nil {
-		delete(cache, childValue)
+		for _, value := range values {
+			delete(cache, value)
+		}
 
 		if node.parent == nil {
-			cache = nil
 			break
 		}
 
 		node = node.parent
 		cache = node.locateCache
 	}
-
-	return
 }
 
 // PopChildFrom a parent in a [Hierarchy].
