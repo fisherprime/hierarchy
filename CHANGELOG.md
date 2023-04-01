@@ -4,6 +4,10 @@ All notable changes to RBAC will be documented in this file.
 
 ## [unreleased]
 
+### Features
+
+- Add `Hierarchy.clearLocateCacheEntry`
+
 ### Miscellaneous Tasks
 
 - Add tool configs & githooks
