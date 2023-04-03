@@ -3,14 +3,14 @@
  "dataLicense": "CC0-1.0",
  "SPDXID": "SPDXRef-DOCUMENT",
  "name": ".",
- "documentNamespace": "https://anchore.com/syft/dir/b1254a02-5fdb-456f-a92d-a241785a3032",
+ "documentNamespace": "https://anchore.com/syft/dir/d4394cd2-6868-4d1f-8fd5-e1d1ee01fd04",
  "creationInfo": {
   "licenseListVersion": "3.19",
   "creators": [
    "Organization: Anchore, Inc",
    "Tool: syft-[not provided]"
   ],
-  "created": "2023-04-01T13:28:58Z",
+  "created": "2023-04-03T12:52:56Z",
   "comment": ""
  },
  "packages": [
@@ -58,6 +58,18 @@
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
      "referenceLocator": "cpe:2.3:a:davecgh:go-spew:v1.1.1:*:*:*:*:*:*:*",
+     "comment": ""
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:davecgh:go-spew:v1.1.1:*:*:*:*:*:*:*",
+     "comment": ""
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:davecgh:go_spew:v1.1.1:*:*:*:*:*:*:*",
      "comment": ""
     },
     {
@@ -199,6 +211,12 @@
      "comment": ""
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.0:*:*:*:*:*:*:*",
+     "comment": ""
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/github.com/sirupsen/logrus@v1.9.0",
@@ -289,6 +307,12 @@
      "comment": ""
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230310171629-522b1b587ee0:*:*:*:*:*:*:*",
+     "comment": ""
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/golang.org/x/exp@v0.0.0-20230310171629-522b1b587ee0",
@@ -312,6 +336,12 @@
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230321023759-10a507213a29:*:*:*:*:*:*:*",
+     "comment": ""
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -390,6 +420,12 @@
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/sys:v0.6.0:*:*:*:*:*:*:*",
+     "comment": ""
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
