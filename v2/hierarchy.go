@@ -146,71 +146,45 @@ func (h *Hierarchy[T]) Child(_ context.Context, childValue T) (child *Hierarchy[
 // AddChild to a [Hierarchy].
 //
 // Throws an error on existing child.
-func (h *Hierarchy[T]) AddChild(ctx context.Context, child *Hierarchy[T]) (err error) {
-	if _, ok := h.Child(ctx, child.value); ok {
+func (h *Hierarchy[T]) AddChild(ctx context.Context, child *Hierarchy[T], parent ...T) (err error) {
+	parentNode := h
+
+	if len(parent) > 0 {
+		if parentNode, err = h.locateParent(ctx, parent[0]); err != nil {
+			return
+		}
+	}
+
+	if _, ok := parentNode.Child(ctx, child.value); ok {
 		return fmt.Errorf("(%v) %w (%v)", child.value, ErrAlreadyChild, h.value)
 	}
 
-	child.parent = h
+	child.parent = parentNode
 	h.children[child.value] = child
 
 	return
 }
 
-// AddChildTo a parent in a [Hierarchy].
-func (h *Hierarchy[T]) AddChildTo(ctx context.Context, parentValue T, child *Hierarchy[T]) (err error) {
-	parent, err := h.Locate(ctx, parentValue)
-	if err != nil {
-		return fmt.Errorf("parent (%v) %w", parentValue, err)
+// PopChild removes an immediate child of the [Hierarchy], returning it's reference.
+func (h *Hierarchy[T]) PopChild(ctx context.Context, childValue T, parentValue ...T) (child *Hierarchy[T], err error) {
+	parent := h
+
+	if len(parentValue) > 0 {
+		if parent, err = h.locateParent(ctx, parentValue[0]); err != nil {
+			return
+		}
 	}
 
-	return parent.AddChild(ctx, child)
-}
-
-// PopChild removes an immediate child of the [Hierarchy], returning it's reference.
-func (h *Hierarchy[T]) PopChild(ctx context.Context, childValue T) (child *Hierarchy[T], err error) {
-	child, ok := h.Child(ctx, childValue)
+	child, ok := parent.Child(ctx, childValue)
 	if !ok {
-		err = fmt.Errorf("child (%v) of (%v): %w", childValue, h.value, ErrNotFound)
+		err = fmt.Errorf("child (%v) of (%v): %w", childValue, parent.value, ErrNotFound)
 		return
 	}
 
-	delete(h.children, childValue)
-	h.clearLocateCacheEntry(ctx, childValue)
+	delete(parent.children, childValue)
+	parent.clearLocateCacheEntry(ctx, childValue)
 
 	return
-}
-
-// clearLocateCacheEntry removes values from the current [Hierarchy] ascending to the root node.
-func (h *Hierarchy[T]) clearLocateCacheEntry(ctx context.Context, values ...T) {
-	if h.locateCache == nil {
-		return
-	}
-
-	node, cache := h, h.locateCache
-	for cache != nil {
-		for _, value := range values {
-			delete(cache, value)
-		}
-
-		if node.parent == nil {
-			break
-		}
-
-		node = node.parent
-		cache = node.locateCache
-	}
-}
-
-// PopChildFrom a parent in a [Hierarchy].
-func (h *Hierarchy[T]) PopChildFrom(ctx context.Context, parentValue, childValue T) (child *Hierarchy[T], err error) {
-	parent, err := h.Locate(ctx, parentValue)
-	if err != nil {
-		err = fmt.Errorf("parent (%v) %w", parentValue, err)
-		return
-	}
-
-	return parent.PopChild(ctx, childValue)
 }
 
 // Children lists the immediate children for a [Hierarchy].
@@ -227,11 +201,19 @@ func (h *Hierarchy[T]) Children(ctx context.Context) (children List[T]) {
 }
 
 // AllChildren lists immediate and children-of children for a [Hierarchy].
-func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children List[T], err error) {
+func (h *Hierarchy[T]) AllChildren(ctx context.Context, parentValue ...T) (children List[T], err error) {
+	parent := h
+
+	if len(parentValue) > 0 {
+		if parent, err = h.locateParent(ctx, parentValue[0]); err != nil {
+			return
+		}
+	}
+
 	children = make(List[T], 0)
 	traverseChan := make(chan TraverseComm[T], traverseBufferSize)
 
-	go h.Walk(ctx, traverseChan)
+	go parent.Walk(ctx, traverseChan)
 
 	for {
 		resl, proceed := <-traverseChan
@@ -246,16 +228,16 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children List[T], err e
 		children = append(children, resl.node)
 	}
 
-	if h.cfg.Debug {
-		h.cfg.Logger.Debugf("walked: %+v", children)
+	if parent.cfg.Debug {
+		parent.cfg.Logger.Debugf("walked: %+v", children)
 	}
 
 	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
 
-		if h.cfg.Debug {
-			h.cfg.Logger.Debugf("children: %+v", children)
+		if parent.cfg.Debug {
+			parent.cfg.Logger.Debugf("children: %+v", children)
 		}
 	}
 
@@ -267,11 +249,19 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context) (children List[T], err e
 }
 
 // AllChildrenByLevel lists immediate and children-of children for a [Hierarchy] by level.
-func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children LevelList[T], err error) {
+func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context, parentValue ...T) (children LevelList[T], err error) {
+	parent := h
+
+	if len(parentValue) > 0 {
+		if parent, err = h.locateParent(ctx, parentValue[0]); err != nil {
+			return
+		}
+	}
+
 	children = make(LevelList[T], 0)
 	traverseChan := make(chan TraverseComm[T], traverseBufferSize)
 
-	go h.Walk(ctx, traverseChan)
+	go parent.Walk(ctx, traverseChan)
 
 	var peers List[T]
 	for {
@@ -298,16 +288,16 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children LevelLi
 		children = append(children, peers)
 	}
 
-	if h.cfg.Debug {
-		h.cfg.Logger.Debugf("walked: %+v", children)
+	if parent.cfg.Debug {
+		parent.cfg.Logger.Debugf("walked: %+v", children)
 	}
 
 	if len(children) > 0 {
 		// Omit self from the list.
 		children = (children)[1:]
 
-		if h.cfg.Debug {
-			h.cfg.Logger.Debugf("children: %+v", children)
+		if parent.cfg.Debug {
+			parent.cfg.Logger.Debugf("children: %+v", children)
 		}
 	}
 
@@ -316,26 +306,6 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context) (children LevelLi
 	}
 
 	return
-}
-
-// AllChildrenOf performs the AllChildren operation for some parent in the Hierarchy.
-func (h *Hierarchy[T]) AllChildrenOf(ctx context.Context, parentValue T) (children List[T], err error) {
-	node, err := h.Locate(ctx, parentValue)
-	if err != nil {
-		return
-	}
-
-	return node.AllChildren(ctx)
-}
-
-// AllChildrenOfByLevel performs the AllChildren operation for some parent in the [Hierarchy] by level.
-func (h *Hierarchy[T]) AllChildrenOfByLevel(ctx context.Context, parentValue T) (children LevelList[T], err error) {
-	node, err := h.Locate(ctx, parentValue)
-	if err != nil {
-		return
-	}
-
-	return node.AllChildrenByLevel(ctx)
 }
 
 // Leaves returns an array of terminal [Hierarchy](ies).
@@ -356,7 +326,7 @@ func (h *Hierarchy[T]) Leaves(ctx context.Context) (termNodes List[T], err error
 			return
 		}
 
-		if resl.node.children == nil || len(resl.node.children) < 1 {
+		if len(resl.node.children) < 1 {
 			termNodes = append(termNodes, resl.node)
 		}
 	}
@@ -368,24 +338,18 @@ func (h *Hierarchy[T]) Leaves(ctx context.Context) (termNodes List[T], err error
 	return
 }
 
-// ParentTo returns the parent [Hierarchy] for some node identified by its value.
-func (h *Hierarchy[T]) ParentTo(ctx context.Context, childValue T) (parent *Hierarchy[T], err error) {
-	node, err := h.Locate(ctx, childValue)
-	if err != nil {
-		err = fmt.Errorf("(%v) %w", childValue, err)
-		return
+// Locate searches for a value & returns it's [Hierarchy].
+func (h *Hierarchy[T]) Locate(ctx context.Context, childValue T, parentValue ...T) (child *Hierarchy[T], err error) {
+	parent := h
+
+	if len(parentValue) > 0 {
+		if parent, err = h.locateParent(ctx, parentValue[0]); err != nil {
+			return
+		}
 	}
 
-	// Update the variable to hold the parent node.
-	parent = node.parent
-
-	return
-}
-
-// Locate searches for a value & returns it's [Hierarchy].
-func (h *Hierarchy[T]) Locate(ctx context.Context, value T) (node *Hierarchy[T], err error) {
-	if h.value == value {
-		return h, nil
+	if parent.value == childValue {
+		return parent, nil
 	}
 
 	traverseChan := make(chan TraverseComm[T])
@@ -395,7 +359,7 @@ func (h *Hierarchy[T]) Locate(ctx context.Context, value T) (node *Hierarchy[T],
 	locateCtx, locateCancel := context.WithCancel(ctx)
 	defer locateCancel()
 
-	go h.locate(locateCtx, value, traverseChan, wg)
+	go parent.locate(locateCtx, childValue, traverseChan, wg)
 	go func() {
 		wg.Wait()
 		close(traverseChan)
@@ -403,20 +367,20 @@ func (h *Hierarchy[T]) Locate(ctx context.Context, value T) (node *Hierarchy[T],
 
 	resl, proceed := <-traverseChan
 	if !proceed {
-		err = ErrNotFound
+		err = fmt.Errorf("(%v) %w", childValue, ErrNotFound)
 		return
 	}
 	locateCancel()
 
-	if node, err = resl.node, resl.err; node != nil {
-		if h.locateCache != nil {
-			h.locateCache[node.value] = node
+	if child, err = resl.node, resl.err; child != nil {
+		if parent.locateCache != nil {
+			parent.locateCache[child.value] = child
 		}
 
 		return
 	}
 
-	err = ErrNotFound
+	err = fmt.Errorf("(%v) %w", childValue, ErrNotFound)
 
 	return
 }
@@ -443,8 +407,8 @@ func (h *Hierarchy[T]) locate(ctx context.Context, value T, traverseChan chan Tr
 		}
 	}
 
-	if node, ok := h.children[value]; ok {
-		traverseChan <- TraverseComm[T]{node: node}
+	if child, ok := h.Child(ctx, value); ok {
+		traverseChan <- TraverseComm[T]{node: child}
 		return
 	}
 
@@ -461,16 +425,9 @@ func (h *Hierarchy[T]) locate(ctx context.Context, value T, traverseChan chan Tr
 	}
 }
 
-// LocateFrom searches for a childValue from some parentValue & returns it's [Hierarchy].
-func (h *Hierarchy[T]) LocateFrom(ctx context.Context, parentValue, childValue T) (child *Hierarchy[T], err error) {
-	parent, err := h.Locate(ctx, parentValue)
-	if err != nil {
-		err = fmt.Errorf("parent (%v) %w", parentValue, err)
-		return
-	}
-
-	if child, err = parent.Locate(ctx, parentValue); err != nil {
-		err = fmt.Errorf(notChildErrFmt, childValue, ErrNotChild, parentValue)
+func (h *Hierarchy[T]) locateParent(ctx context.Context, parent T) (node *Hierarchy[T], err error) {
+	if node, err = h.Locate(ctx, parent); err != nil {
+		err = fmt.Errorf("parent %w", err)
 	}
 
 	return
@@ -495,6 +452,7 @@ func (h *Hierarchy[T]) Walk(ctx context.Context, traverseChan chan TraverseComm[
 	select {
 	case <-ctx.Done():
 		// Received context cancellation.
+		traverseChan <- TraverseComm[T]{err: ctx.Err()}
 		return
 	default:
 		// Use a var for front to ensure the outer scope queue is modified.
@@ -532,6 +490,27 @@ func (h *Hierarchy[T]) Walk(ctx context.Context, traverseChan chan TraverseComm[
 				}
 			}
 		}
+	}
+}
+
+// clearLocateCacheEntry removes values from the current [Hierarchy] ascending to the root node.
+func (h *Hierarchy[T]) clearLocateCacheEntry(ctx context.Context, values ...T) {
+	if h.locateCache == nil {
+		return
+	}
+
+	node, cache := h, h.locateCache
+	for cache != nil {
+		for _, value := range values {
+			delete(cache, value)
+		}
+
+		if node.parent == nil {
+			break
+		}
+
+		node = node.parent
+		cache = node.locateCache
 	}
 }
 

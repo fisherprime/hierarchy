@@ -182,7 +182,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 				}
 
 				var parent *Hierarchy[T]
-				if parent, err = h.Locate(ctx, parentID); err != nil {
+				if parent, err = h.locateParent(ctx, parentID); err != nil {
 					if errors.Is(err, ErrNotFound) {
 						// Inconsistency between the cache & hierarchy.
 						err = fmt.Errorf("%w: %v", ErrInconsistentBuildCache, err)
