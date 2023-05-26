@@ -49,6 +49,9 @@ if [[ -x "$(command -v git-cliff)" ]]; then
 	fi
 fi
 
-[[ require_push -eq 1 ]] && git push --follow-tags
+push_flags="--follow-tags"
+[[ "$1" == "all" ]] && push_flags+=" --all"
+
+[[ require_push -eq 1 ]] && git push $push_flags
 
 exit 0
