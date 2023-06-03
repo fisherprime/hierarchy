@@ -509,6 +509,7 @@ func (h *Hierarchy[T]) clearLocateCacheEntry(ctx context.Context, values ...T) {
 			break
 		}
 
+		// Ascend to parent node.
 		node = node.parent
 		cache = node.locateCache
 	}
