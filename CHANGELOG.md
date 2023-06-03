@@ -4,6 +4,10 @@ All notable changes to RBAC will be documented in this file.
 
 ## [unreleased]
 
+### Bug Fixes
+
+- Temporarily disable ants goroutine pool usage
+
 ### Documentation
 
 - Add comment on clearLocateCacheEntry operation ascending to parent node
