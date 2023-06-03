@@ -74,7 +74,9 @@ type (
 
 const (
 	traverseBufferSize = 10
-	poolSize           = 100
+
+	// Use infinitely scaling pool
+	poolSize = 0
 
 	notChildErrFmt = "(%v) %w (%v)"
 )
@@ -423,7 +425,8 @@ func (h *Hierarchy[T]) locate(ctx context.Context, wkPool *ants.Pool, value T, t
 		internalWG := new(sync.WaitGroup)
 		internalWG.Add(len(h.children))
 		for _, v := range h.children {
-			ants.Submit(func() { v.locate(ctx, wkPool, value, traverseChan, internalWG) })
+			// wkPool.Submit(func() { v.locate(ctx, wkPool, value, traverseChan, internalWG) })
+			go v.locate(ctx, wkPool, value, traverseChan, internalWG)
 		}
 		internalWG.Wait()
 	}
