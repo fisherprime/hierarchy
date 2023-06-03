@@ -8,6 +8,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/panjf2000/ants/v2"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/constraints"
 )
@@ -73,7 +74,7 @@ type (
 
 const (
 	traverseBufferSize = 10
-	// poolSize           = 100
+	poolSize           = 100
 
 	notChildErrFmt = "(%v) %w (%v)"
 )
@@ -359,7 +360,10 @@ func (h *Hierarchy[T]) Locate(ctx context.Context, childValue T, parentValue ...
 	locateCtx, locateCancel := context.WithCancel(ctx)
 	defer locateCancel()
 
-	go parent.locate(locateCtx, childValue, traverseChan, wg)
+	wkPool, _ := ants.NewPool(poolSize)
+	defer wkPool.Release()
+
+	go parent.locate(locateCtx, wkPool, childValue, traverseChan, wg)
 	go func() {
 		wg.Wait()
 		close(traverseChan)
@@ -385,7 +389,7 @@ func (h *Hierarchy[T]) Locate(ctx context.Context, childValue T, parentValue ...
 	return
 }
 
-func (h *Hierarchy[T]) locate(ctx context.Context, value T, traverseChan chan TraverseComm[T], wg *sync.WaitGroup) {
+func (h *Hierarchy[T]) locate(ctx context.Context, wkPool *ants.Pool, value T, traverseChan chan TraverseComm[T], wg *sync.WaitGroup) {
 	defer wg.Done()
 	if h.cfg.Debug {
 		h.cfg.Logger.Debugf("locate val %s in %+v", value, h)
@@ -419,7 +423,7 @@ func (h *Hierarchy[T]) locate(ctx context.Context, value T, traverseChan chan Tr
 		internalWG := new(sync.WaitGroup)
 		internalWG.Add(len(h.children))
 		for _, v := range h.children {
-			go v.locate(ctx, value, traverseChan, internalWG)
+			ants.Submit(func() { v.locate(ctx, wkPool, value, traverseChan, internalWG) })
 		}
 		internalWG.Wait()
 	}
