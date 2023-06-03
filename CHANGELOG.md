@@ -4,9 +4,14 @@ All notable changes to RBAC will be documented in this file.
 
 ## [unreleased]
 
+### Documentation
+
+- Add comment on clearLocateCacheEntry operation ascending to parent node
+
 ### Features
 
 - Add `Hierarchy.clearLocateCacheEntry`
+- Add ants goroutine pool to [hierarchy.Locate]
 
 ### Miscellaneous Tasks
 
@@ -17,6 +22,7 @@ All notable changes to RBAC will be documented in this file.
 - Update dependencies
 - Update dependencies
 - Update dependencies
+- Update dependencies & git hook
 
 ### Performance
 
