@@ -38,4 +38,8 @@ All notable changes to RBAC will be documented in this file.
 - Add misc changes
 - Revise methods
 
+### Styling
+
+- Resolve spelling error & update dependencies
+
 <!-- fisher -->
