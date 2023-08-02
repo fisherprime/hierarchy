@@ -28,6 +28,7 @@ All notable changes to RBAC will be documented in this file.
 - Update dependencies
 - Update dependencies & git hook
 - Update dependencies
+- Update dependencies
 
 ### Performance
 
