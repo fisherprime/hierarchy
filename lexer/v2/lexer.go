@@ -66,7 +66,7 @@ var (
 
 // Improves on performance compared to ORs.
 //
-// Reduces function cost improving probalility of inlining.
+// Reduces function cost improving probability of inlining.
 var (
 	whitespace = [256]bool{
 		' ':  true,

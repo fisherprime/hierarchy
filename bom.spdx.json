@@ -3,14 +3,14 @@
  "dataLicense": "CC0-1.0",
  "SPDXID": "SPDXRef-DOCUMENT",
  "name": ".",
- "documentNamespace": "https://anchore.com/syft/dir/03470c96-6cd3-4c61-828f-62f515370805",
+ "documentNamespace": "https://anchore.com/syft/dir/15c98fa9-f908-45bd-bbca-f1757e6bf28d",
  "creationInfo": {
   "licenseListVersion": "3.20",
   "creators": [
    "Organization: Anchore, Inc",
    "Tool: syft-[not provided]"
   ],
-  "created": "2023-06-14T08:28:09Z"
+  "created": "2023-07-18T12:37:59Z"
  },
  "packages": [
   {
@@ -57,6 +57,16 @@
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
      "referenceLocator": "cpe:2.3:a:davecgh:go-spew:v1.1.1:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:davecgh:go-spew:v1.1.1:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:davecgh:go_spew:v1.1.1:*:*:*:*:*:*:*"
     },
     {
      "referenceCategory": "SECURITY",
@@ -277,6 +287,16 @@
      "referenceLocator": "cpe:2.3:a:davecgh:go_spew:v1.1.1:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:davecgh:go-spew:v1.1.1:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:davecgh:go_spew:v1.1.1:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/github.com/davecgh/go-spew@v1.1.1"
@@ -346,6 +366,11 @@
      "referenceLocator": "cpe:2.3:a:panjf2000:ants\\/v2:v2.7.4:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:panjf2000:ants\\/v2:v2.7.4:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/github.com/panjf2000/ants/v2@v2.7.4"
@@ -354,14 +379,19 @@
   },
   {
    "name": "github.com/panjf2000/ants/v2",
-   "SPDXID": "SPDXRef-Package-go-module-github.com-panjf2000-ants-v2-f0a257162e96bd1",
+   "SPDXID": "SPDXRef-Package-go-module-github.com-panjf2000-ants-v2-c56ce5f4b9e049f6",
    "versionInfo": "v2.7.5",
    "downloadLocation": "NOASSERTION",
-   "sourceInfo": "acquired package info from go module information: go.mod",
+   "sourceInfo": "acquired package info from SBOM: bom.spdx.json",
    "licenseConcluded": "NONE",
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:panjf2000:ants\\/v2:v2.7.5:*:*:*:*:*:*:*"
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -375,6 +405,28 @@
    ]
   },
   {
+   "name": "github.com/panjf2000/ants/v2",
+   "SPDXID": "SPDXRef-Package-go-module-github.com-panjf2000-ants-v2-4ac0fa9f52e9ac98",
+   "versionInfo": "v2.8.1",
+   "downloadLocation": "NOASSERTION",
+   "sourceInfo": "acquired package info from go module information: go.mod",
+   "licenseConcluded": "NONE",
+   "licenseDeclared": "NONE",
+   "copyrightText": "NOASSERTION",
+   "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:panjf2000:ants\\/v2:v2.8.1:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "PACKAGE-MANAGER",
+     "referenceType": "purl",
+     "referenceLocator": "pkg:golang/github.com/panjf2000/ants/v2@v2.8.1"
+    }
+   ]
+  },
+  {
    "name": "github.com/sirupsen/logrus",
    "SPDXID": "SPDXRef-Package-go-module-github.com-sirupsen-logrus-176e16d2d1f74c97",
    "versionInfo": "v1.9.0",
@@ -384,6 +436,11 @@
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.0:*:*:*:*:*:*:*"
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -523,6 +580,11 @@
      "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.0:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.0:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/github.com/sirupsen/logrus@v1.9.0"
@@ -570,9 +632,41 @@
      "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.2:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.2:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/github.com/sirupsen/logrus@v1.9.2"
+    }
+   ]
+  },
+  {
+   "name": "github.com/sirupsen/logrus",
+   "SPDXID": "SPDXRef-Package-go-module-github.com-sirupsen-logrus-a83271e3cf1da7a7",
+   "versionInfo": "v1.9.3",
+   "downloadLocation": "NOASSERTION",
+   "sourceInfo": "acquired package info from SBOM: bom.spdx.json",
+   "licenseConcluded": "NONE",
+   "licenseDeclared": "NONE",
+   "copyrightText": "NOASSERTION",
+   "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.3:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:sirupsen:logrus:v1.9.3:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "PACKAGE-MANAGER",
+     "referenceType": "purl",
+     "referenceLocator": "pkg:golang/github.com/sirupsen/logrus@v1.9.3"
     }
    ]
   },
@@ -614,6 +708,11 @@
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230310171629-522b1b587ee0:*:*:*:*:*:*:*"
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -778,6 +877,11 @@
      "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230321023759-10a507213a29:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230321023759-10a507213a29:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/golang.org/x/exp@v0.0.0-20230321023759-10a507213a29"
@@ -794,6 +898,11 @@
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230425010034-47ecfdc1ba53:*:*:*:*:*:*:*"
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -887,6 +996,11 @@
      "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230510235704-dd950f8aeaea:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230510235704-dd950f8aeaea:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/golang.org/x/exp@v0.0.0-20230510235704-dd950f8aeaea"
@@ -903,6 +1017,11 @@
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230519143937-03e91628a987:*:*:*:*:*:*:*"
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -976,6 +1095,11 @@
      "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230522175609-2e198f4a06a1:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230522175609-2e198f4a06a1:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/golang.org/x/exp@v0.0.0-20230522175609-2e198f4a06a1"
@@ -984,8 +1108,8 @@
   },
   {
    "name": "golang.org/x/exp",
-   "SPDXID": "SPDXRef-Package-go-module-golang.org-x-exp-564094fdddbc8bb4",
-   "versionInfo": "v0.0.0-20230522175609-2e198f4a06a1",
+   "SPDXID": "SPDXRef-Package-go-module-golang.org-x-exp-d5030f04969668c6",
+   "versionInfo": "v0.0.0-20230713183714-613f0c0eb8a1",
    "downloadLocation": "NOASSERTION",
    "sourceInfo": "acquired package info from go module information: go.mod",
    "licenseConcluded": "NONE",
@@ -995,12 +1119,34 @@
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230522175609-2e198f4a06a1:*:*:*:*:*:*:*"
+     "referenceLocator": "cpe:2.3:a:golang:x\\/exp:v0.0.0-20230713183714-613f0c0eb8a1:*:*:*:*:*:*:*"
     },
     {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
-     "referenceLocator": "pkg:golang/golang.org/x/exp@v0.0.0-20230522175609-2e198f4a06a1"
+     "referenceLocator": "pkg:golang/golang.org/x/exp@v0.0.0-20230713183714-613f0c0eb8a1"
+    }
+   ]
+  },
+  {
+   "name": "golang.org/x/sys",
+   "SPDXID": "SPDXRef-Package-go-module-golang.org-x-sys-e01240df26cff655",
+   "versionInfo": "v0.10.0",
+   "downloadLocation": "NOASSERTION",
+   "sourceInfo": "acquired package info from go module information: go.mod",
+   "licenseConcluded": "NONE",
+   "licenseDeclared": "NONE",
+   "copyrightText": "NOASSERTION",
+   "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/sys:v0.10.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "PACKAGE-MANAGER",
+     "referenceType": "purl",
+     "referenceLocator": "pkg:golang/golang.org/x/sys@v0.10.0"
     }
    ]
   },
@@ -1020,6 +1166,11 @@
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/sys:v0.6.0:*:*:*:*:*:*:*"
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -1153,6 +1304,11 @@
      "referenceLocator": "cpe:2.3:a:golang:x\\/sys:v0.8.0:*:*:*:*:*:*:*"
     },
     {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/sys:v0.8.0:*:*:*:*:*:*:*"
+    },
+    {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
      "referenceLocator": "pkg:golang/golang.org/x/sys@v0.8.0"
@@ -1161,14 +1317,19 @@
   },
   {
    "name": "golang.org/x/sys",
-   "SPDXID": "SPDXRef-Package-go-module-golang.org-x-sys-3134005847802187",
+   "SPDXID": "SPDXRef-Package-go-module-golang.org-x-sys-7879cdfca20a94ba",
    "versionInfo": "v0.9.0",
    "downloadLocation": "NOASSERTION",
-   "sourceInfo": "acquired package info from go module information: go.mod",
+   "sourceInfo": "acquired package info from SBOM: bom.spdx.json",
    "licenseConcluded": "NONE",
    "licenseDeclared": "NONE",
    "copyrightText": "NOASSERTION",
    "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:golang:x\\/sys:v0.9.0:*:*:*:*:*:*:*"
+    },
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
@@ -1222,19 +1383,13 @@
    "comment": "evident-by: indicates the package's existence is evident by the given file"
   },
   {
-   "spdxElementId": "SPDXRef-Package-go-module-golang.org-x-sys-3134005847802187",
-   "relatedSpdxElement": "SPDXRef-File-go.mod-ed9ca1d5b0eb32bc",
-   "relationshipType": "OTHER",
-   "comment": "evident-by: indicates the package's existence is evident by the given file"
-  },
-  {
    "spdxElementId": "SPDXRef-Package-go-module-github.com-davecgh-go-spew-400d5e580d04b9d2",
    "relatedSpdxElement": "SPDXRef-File-bom.spdx.json-a345cfee05e57a72",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"
   },
   {
-   "spdxElementId": "SPDXRef-Package-go-module-golang.org-x-exp-564094fdddbc8bb4",
+   "spdxElementId": "SPDXRef-Package-go-module-github.com-panjf2000-ants-v2-4ac0fa9f52e9ac98",
    "relatedSpdxElement": "SPDXRef-File-go.mod-ed9ca1d5b0eb32bc",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"
@@ -1247,6 +1402,12 @@
   },
   {
    "spdxElementId": "SPDXRef-Package-go-module-golang.org-x-exp-7788cc4810bcb5aa",
+   "relatedSpdxElement": "SPDXRef-File-bom.spdx.json-a345cfee05e57a72",
+   "relationshipType": "OTHER",
+   "comment": "evident-by: indicates the package's existence is evident by the given file"
+  },
+  {
+   "spdxElementId": "SPDXRef-Package-go-module-golang.org-x-sys-7879cdfca20a94ba",
    "relatedSpdxElement": "SPDXRef-File-bom.spdx.json-a345cfee05e57a72",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"
@@ -1288,7 +1449,25 @@
    "comment": "evident-by: indicates the package's existence is evident by the given file"
   },
   {
+   "spdxElementId": "SPDXRef-Package-go-module-github.com-sirupsen-logrus-a83271e3cf1da7a7",
+   "relatedSpdxElement": "SPDXRef-File-bom.spdx.json-a345cfee05e57a72",
+   "relationshipType": "OTHER",
+   "comment": "evident-by: indicates the package's existence is evident by the given file"
+  },
+  {
    "spdxElementId": "SPDXRef-Package-go-module-github.com-sirupsen-logrus-c561c26d7e8888b6",
+   "relatedSpdxElement": "SPDXRef-File-go.mod-ed9ca1d5b0eb32bc",
+   "relationshipType": "OTHER",
+   "comment": "evident-by: indicates the package's existence is evident by the given file"
+  },
+  {
+   "spdxElementId": "SPDXRef-Package-go-module-github.com-panjf2000-ants-v2-c56ce5f4b9e049f6",
+   "relatedSpdxElement": "SPDXRef-File-bom.spdx.json-a345cfee05e57a72",
+   "relationshipType": "OTHER",
+   "comment": "evident-by: indicates the package's existence is evident by the given file"
+  },
+  {
+   "spdxElementId": "SPDXRef-Package-go-module-golang.org-x-exp-d5030f04969668c6",
    "relatedSpdxElement": "SPDXRef-File-go.mod-ed9ca1d5b0eb32bc",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"
@@ -1300,13 +1479,13 @@
    "comment": "evident-by: indicates the package's existence is evident by the given file"
   },
   {
-   "spdxElementId": "SPDXRef-Package-go-module-github.com-davecgh-go-spew-e69c0beffd356805",
+   "spdxElementId": "SPDXRef-Package-go-module-golang.org-x-sys-e01240df26cff655",
    "relatedSpdxElement": "SPDXRef-File-go.mod-ed9ca1d5b0eb32bc",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"
   },
   {
-   "spdxElementId": "SPDXRef-Package-go-module-github.com-panjf2000-ants-v2-f0a257162e96bd1",
+   "spdxElementId": "SPDXRef-Package-go-module-github.com-davecgh-go-spew-e69c0beffd356805",
    "relatedSpdxElement": "SPDXRef-File-go.mod-ed9ca1d5b0eb32bc",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"
