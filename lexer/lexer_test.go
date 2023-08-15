@@ -3,6 +3,7 @@ package lexer
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -20,13 +21,14 @@ func BenchmarkLexer_Lex(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		b.StopTimer()
-		l := New(Opts{Logger: logger}, src)
+		l := New(WithLogger(logger), WithSource(strings.NewReader(src)))
 		b.StartTimer()
 
 		go l.Lex(ctx)
 
 		for {
-			if item, proceed := <-l.C; !proceed || item.ID == ItemEOF {
+			// ItemEOF check is unnecessary.
+			if _, proceed := l.Item(); !proceed {
 				break
 			}
 		}

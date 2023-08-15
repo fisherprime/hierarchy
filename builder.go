@@ -10,22 +10,24 @@ import (
 )
 
 type (
-	// Builder defines an interface for entities that can be read into a Hierarchy.
-	Builder interface {
+	// Builder defines an interface for entities that can be read into a [Hierarchy].
+	Builder[T Constraint] interface {
 		// Value obtains the value stored by the Builder.
-		Value() string
+		Value() T
 		// Parent obtains the parent stored by the Builder
-		Parent() string
+		Parent() T
 	}
 
-	// BuilderList is a wrapper type for []Builder.
-	BuilderList []Builder
+	// BuildSource is a wrapper type for [][Builder] used to generate the [Hierarchy].
+	BuildSource[T Constraint] struct {
+		cfg *Config
 
-	// DefaultBuilder is a sample Builder interface implementation.
-	DefaultBuilder struct {
-		value  string
-		parent string
+		builders  []Builder[T]
+		isOrdered bool
 	}
+
+	// BuildOption defines the BuildSource functional option type.
+	BuildOption[T Constraint] func(*BuildSource[T])
 )
 
 // Hierarchy building errors.
@@ -37,72 +39,99 @@ var (
 
 	ErrEmptyHierarchySrc      = errors.New("empty hierarchy source")
 	ErrInvalidHierarchySrc    = errors.New("invalid hierarchy source")
-	ErrInconsistentBuildCache = errors.New("inconsistency between hierarchy and build cache")
+	ErrInconsistentBuildCache = errors.New("inconsistency between the hierarchy and build cache")
 
 	ErrLocateParents = errors.New("unable to locate parents(s)")
 
 	ErrPanicked = errors.New("recovery from panic")
 )
 
-// Value obtains the value stored by the DefaultBuilder.
+// Value obtains the value stored by the [DefaultBuilder].
 func (d *DefaultBuilder) Value() string { return d.value }
 
-// Parent obtains the parent stored by the DefaultBuilder
+// Parent obtains the parent stored by the [DefaultBuilder]
 func (d *DefaultBuilder) Parent() string { return d.parent }
 
-// Cut a value at some index from the BuilderList.
-func (b *BuilderList) Cut(index int) {
-	upper := index + 1
+// NewBuildSource instantiates a [BuildSource].
+func NewBuildSource[T Constraint](options ...BuildOption[T]) *BuildSource[T] {
+	b := &BuildSource[T]{
+		cfg:       defConfig,
+		builders:  []Builder[T]{},
+		isOrdered: false,
+	}
 
-	// index == 0.
-	if index < 1 {
-		// length of slice == 0.
-		if upper >= len(*b) {
-			*b = BuilderList{}
-			return
-		}
+	for _, opt := range options {
+		opt(b)
+	}
 
-		*b = (*b)[1:]
+	return b
+}
 
+// WithBuildConfig configures the [BuildSource]'s [Config].
+func WithBuildConfig[T Constraint](cfg *Config) BuildOption[T] {
+	return func(b *BuildSource[T]) { b.cfg = cfg }
+}
+
+// WithBuilders configures the underlying list.
+func WithBuilders[T Constraint](builders []Builder[T]) BuildOption[T] {
+	return func(b *BuildSource[T]) { b.builders = builders }
+}
+
+// IsOrdered configures the [BuildSource] as ordered; all parent [Builder.Value] are less than their
+// respective child's [Builder.Value].
+//
+// Unordered [BuildSource]'s have a [Hierarchy] build-time performance penalty.
+func IsOrdered[T Constraint]() BuildOption[T] {
+	return func(b *BuildSource[T]) { b.isOrdered = true }
+}
+
+// Len retrieves the length of the [BuildSource].
+func (b *BuildSource[T]) Len() int { return len(b.builders) }
+
+// Cut a value at some index from the [BuildSource].
+func (b *BuildSource[T]) Cut(index int) {
+	if index == 0 {
+		b.builders = b.builders[1:]
 		return
 	}
 
-	(*b) = append((*b)[:index], (*b)[upper:]...)
+	upper := index + 1
+	// Cut up to (excluding) `index`, cut from (including) `index+1`.
+	b.builders = append(b.builders[:index], b.builders[upper:]...)
 }
 
-// NewHierarchy generates a Hierarchy from a BuilderList.
-func (b *BuilderList) NewHierarchy(ctx context.Context) (h *Hierarchy, err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("%w: %v", ErrBuildHierarchy, err)
-		}
-	}()
-
+// Build generates a [Hierarchy] from a [BuildSource].
+func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hierarchy[T], err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%w: %v", ErrPanicked, r)
 		}
 
 		if err != nil {
-			fLogger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
-			err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
+			// Avoid unnecessary calls.
+			if b.cfg.Debug {
+				b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
+			}
+			err = fmt.Errorf("%w: %w: %v", ErrBuildHierarchy, ErrInvalidHierarchySrc, err)
 		}
 	}()
 
-	cache := make(map[string]struct{})
+	if b.Len() < 1 {
+		err = ErrEmptyHierarchySrc
+		return
+	}
+
+	var rootValue T
+	buildCache := make(map[T]struct{})
+
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
 		return
 	default:
-		if len(*b) < 1 {
-			err = ErrEmptyHierarchySrc
-			return
-		}
-
 		rootIndex := 0
-		for index := range *b {
-			if (*b)[index].Parent() != "" {
+		for index := range b.builders {
+			if b.builders[index].Parent() != rootValue {
 				continue
 			}
 
@@ -111,8 +140,8 @@ func (b *BuilderList) NewHierarchy(ctx context.Context) (h *Hierarchy, err error
 				err = ErrMultipleRootNodes
 				return
 			}
-			id := (*b)[index].Value()
-			h, cache[id] = New(id), struct{}{}
+			id := b.builders[index].Value()
+			h, buildCache[id] = New(id, options...), struct{}{}
 
 			rootIndex = index
 		}
@@ -121,14 +150,18 @@ func (b *BuilderList) NewHierarchy(ctx context.Context) (h *Hierarchy, err error
 			return
 		}
 
-		// Remove the root node.
-		prevLen := len(*b)
-		fLogger.Debugf("BuilderList: %+v\n", *b)
+		// Remove the root node from the build source..
+		prevLen := b.Len()
+		if b.cfg.Debug {
+			b.cfg.Logger.Debugf("source: %+v\n", *b)
+		}
 		b.Cut(rootIndex)
-		fLogger.Debugf("BuilderList (less root): %+v\n", *b)
+		if b.cfg.Debug {
+			b.cfg.Logger.Debugf("source (without root): %+v\n", *b)
+		}
 
 		for {
-			lenSrc := len(*b)
+			lenSrc := b.Len()
 			if lenSrc < 1 {
 				return
 			}
@@ -140,16 +173,16 @@ func (b *BuilderList) NewHierarchy(ctx context.Context) (h *Hierarchy, err error
 			prevLen = lenSrc
 
 			for index := 0; index < lenSrc; index++ {
-				node := (*b)[index]
+				node := b.builders[index]
 				parentID := node.Parent()
 
 				// Parent not in hierarchy.
-				if _, ok := cache[parentID]; !ok {
+				if _, ok := buildCache[parentID]; !ok {
 					continue
 				}
 
-				var parent *Hierarchy
-				if parent, err = h.Locate(ctx, parentID); err != nil {
+				var parent *Hierarchy[T]
+				if parent, err = h.locateParent(ctx, parentID); err != nil {
 					if errors.Is(err, ErrNotFound) {
 						// Inconsistency between the cache & hierarchy.
 						err = fmt.Errorf("%w: %v", ErrInconsistentBuildCache, err)
@@ -159,21 +192,21 @@ func (b *BuilderList) NewHierarchy(ctx context.Context) (h *Hierarchy, err error
 				}
 
 				childID := node.Value()
-				if err = parent.AddChild(ctx, New(childID)); err != nil {
+				if err = parent.AddChild(ctx, New(childID, options...)); err != nil {
 					return
 				}
-				cache[childID] = struct{}{}
+				buildCache[childID] = struct{}{}
 
+				// Remove added node from the build source.
 				b.Cut(index)
 
-				// Allow for unordered BuilderLists.
-				//
-				// Adds extraneous opcodes compared to the ordered BuilderList's operations
-				// commented below.
-				break
+				// Break to outer for loop.
+				if !b.isOrdered {
+					break
+				}
 
-				/* index--
-				 * lenSrc-- */
+				index--
+				lenSrc--
 			}
 		}
 	}

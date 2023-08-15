@@ -1,4 +1,4 @@
-module gitlab.com/fisherprime/hierarchy
+module gitlab.com/fisherprime/hierarchy/v2
 
 go 1.20
 
@@ -6,7 +6,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/panjf2000/ants/v2 v2.8.1
 	github.com/sirupsen/logrus v1.9.3
-	golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b
+	golang.org/x/exp v0.0.0-20230811145659-89c5cff77bcb
 )
 
-require golang.org/x/sys v0.10.0 // indirect
+require golang.org/x/sys v0.11.0 // indirect

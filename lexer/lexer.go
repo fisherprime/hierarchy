@@ -3,6 +3,8 @@ package lexer
 
 // REF: https://github.com/sh4t/sql-parser
 // REF: https://gitlab.com/fisherprime/go-ddbms/-/blob/master/internal/v1/lexer.go
+// REF: https://dave.cheney.net/high-performance-json.html
+// REF: []rune to []byte conversion. https://stackoverflow.com/a/29255836
 
 import (
 	"context"
@@ -11,6 +13,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -22,46 +26,107 @@ type (
 
 	// Lexer defines a type to capture identifiers from a string.
 	Lexer struct {
-		source io.RuneReader // input source
-		opts   Opts
+		// source is the input source.
+		source io.RuneReader
 
-		C chan Item // channel for scanned Items
+		cfg Config
 
-		buffer []rune // slice of runes being lexed
+		// c is a channel for communicating lexed Items.
+		c chan Item
 
-		sourceIndex int // start position of this item's rune
-		bufferIndex int // current buffer position
+		// buffer is a slice of runes being lexed.
+		buffer []rune
+
+		// bufferIndex is the current buffer position.
+		//
+		// When this value exceeds the length of buffer, the buffer is populated from the source.
+		bufferIndex int
 
 		valueCounter int
 		endCounter   int
+
+		Debug bool
 	}
+
+	// Option defines the Lexer functional option type
+	Option func(*Lexer)
 )
 
 const (
-	peekLimit = 512
-
+	sourceLimit   = 512
 	defBufferSize = 10
 )
 
-// New creates a new scanner for the input string
-func New(opts Opts, source string) *Lexer {
-	(&opts).Validate()
+// Lexing errors.
+var (
+	ErrInvalidPeekLength   = fmt.Errorf("invalid peek length")
+	ErrInvalidBackupAmount = fmt.Errorf("invalid backup amount")
+	ErrUnknownTokens       = fmt.Errorf("unknown tokens")
+)
 
-	return &Lexer{
-		opts: opts,
-
-		C: make(chan Item),
-
-		source: strings.NewReader(source),
-		buffer: make([]rune, 0, defBufferSize),
+// Improves on performance compared to ORs.
+//
+// Reduces function cost improving probability of inlining.
+var (
+	whitespace = [256]bool{
+		' ':  true,
+		'\t': true,
+		'\r': true,
+		'\n': true,
 	}
+
+	alphaSymbols = [256]bool{
+		'_': true,
+		'-': true,
+	}
+)
+
+// New creates a new scanner for the input string
+func New(opts ...Option) *Lexer {
+	l := &Lexer{
+		cfg: Config{
+			Debug:     false,
+			EndMarker: DefaultEndMarker,
+			Splitter:  DefaultSplitter,
+			Logger:    logrus.New(),
+		},
+
+		c: make(chan Item, defBufferSize),
+
+		buffer: make([]rune, 0, defBufferSize),
+		source: strings.NewReader(""),
+	}
+
+	for _, opt := range opts {
+		opt(l)
+	}
+
+	return l
 }
 
+// WithConfig configures the [Lexer]'s [Config].
+func WithConfig(opts *Config) Option { return func(l *Lexer) { l.cfg = *opts } }
+
+// WithDebug configures the debug option.
+func WithDebug(debug bool) Option { return func(l *Lexer) { l.cfg.Debug = debug } }
+
+// WithEndMarker configures the EndMarker option.
+func WithEndMarker(r rune) Option { return func(l *Lexer) { l.cfg.EndMarker = r } }
+
+// WithSplitter configures the splitter option.
+func WithSplitter(r rune) Option { return func(l *Lexer) { l.cfg.Splitter = r } }
+
+// WithLogger configures the logger option.
+func WithLogger(logger logrus.FieldLogger) Option { return func(l *Lexer) { l.cfg.Logger = logger } }
+
+// WithSource configures the source option.
+func WithSource(source io.RuneReader) Option { return func(l *Lexer) { l.source = source } }
+
 // EndMarker obtains the configured end marker.
-func (l *Lexer) EndMarker() rune { return l.opts.EndMarker }
+func (l *Lexer) EndMarker() rune { return l.cfg.EndMarker }
 
 // Splitter obtains the configured value splitter.
-func (l *Lexer) Splitter() rune { return l.opts.Splitter }
+func (l *Lexer) Splitter() rune { return l.cfg.Splitter }
 
 // ValueCounter obtains valueCounter.
 func (l *Lexer) ValueCounter() int { return l.valueCounter }
@@ -69,239 +134,251 @@ func (l *Lexer) ValueCounter() int { return l.valueCounter }
 // EndCounter obtains endCounter.
 func (l *Lexer) EndCounter() int { return l.endCounter }
 
+// Logger obtains the logger.
+func (l *Lexer) Logger() logrus.FieldLogger { return l.cfg.Logger }
+
 // Lex lexes the input by executing state functions.
 func (l *Lexer) Lex(ctx context.Context) {
-	for stateFunction := l.LexWhitespace; stateFunction != nil; {
-		stateFunction = stateFunction(ctx)
+	select {
+	case <-ctx.Done():
+		l.EmitError(ctx.Err())
+	default:
+		for stateFunction := l.LexWhitespace; stateFunction != nil; {
+			stateFunction = stateFunction(ctx)
+		}
 	}
 
 	// Close channel
-	close(l.C)
+	close(l.c)
 }
 
 // LexWhitespace search for whitespace.
 func (l *Lexer) LexWhitespace(ctx context.Context) NextOperation {
-	select {
-	case <-ctx.Done():
+	if err := l.AcceptWhile(isWhitespace); err != nil {
+		l.EmitError(err)
 		return nil
+	}
+	// Ignore white spaces, discard instead of emit.
+	l.Discard()
+
+	next := l.Next()
+	switch {
+	case next == emptyRune:
+		return nil
+	case next == l.cfg.EndMarker:
+		l.endCounter++
+		l.Emit(ItemEndMarker)
+
+		return l.LexWhitespace(ctx)
+	case next == l.cfg.Splitter:
+		l.Emit(ItemSplitter)
+
+		return l.LexWhitespace(ctx)
+	case isValue(next):
+		return l.LexValue(ctx)
 	default:
-		// Do nothing with white spaces.
-		if err := l.AcceptWhile(isWhitespace); err != nil {
-			return l.EmitError(err)
-		}
-
-		next, err := l.Peek()
-		l.opts.Logger.Debug("next token: ", string(next), "\ncurrent token: ",
-			string(l.buffer[l.bufferIndex]), "\nerr: ", err)
-		if err != nil {
-			return l.EmitError(err)
-		}
-
-		switch {
-		case next == l.opts.EndMarker:
-			_, _ = l.Next()
-			l.endCounter++
-			l.Emit(ItemEndMarker)
-
-			return l.LexWhitespace(ctx)
-		case next == l.opts.Splitter:
-			_, _ = l.Next()
-			l.Emit(ItemSplitter)
-
-			return l.LexWhitespace(ctx)
-		case isValue(next):
-			return l.LexValue(ctx)
-		default:
-			nextRunes, err := l.PeekNext(peekLimit)
-			if err != nil {
-				return l.EmitError(err)
-			}
-
-			l.EmitError(fmt.Errorf("unknown operation for: %v", string(nextRunes)))
-
+		if err := l.Backup(); err != nil {
+			l.EmitError(err)
 			return nil
 		}
+
+		nextRunes, err := l.PeekN(sourceLimit)
+		if err != nil {
+			l.EmitError(err)
+			return nil
+		}
+
+		l.EmitError(fmt.Errorf("%w: %s", ErrUnknownTokens, string(nextRunes)))
+
+		return nil
 	}
 }
 
 // LexValue search for identifiers / SQL keywords
 func (l *Lexer) LexValue(ctx context.Context) NextOperation {
-	select {
-	case <-ctx.Done():
+	if err := l.AcceptWhile(isValue); err != nil {
+		l.EmitError(err)
 		return nil
-	default:
-		next, err := l.Next()
-		if err != nil {
-			if err == io.EOF {
-				l.Emit(ItemEOF)
-				return nil
-			}
-			l.EmitError(err)
-
-			return nil
-		}
-
-		if isValue(next) {
-			if err := l.AcceptWhile(isValue); err != nil {
-				l.EmitError(err)
-				return nil
-			}
-
-			l.valueCounter++
-			l.Emit(ItemValue)
-		}
-
-		return l.LexWhitespace(ctx)
 	}
+
+	l.valueCounter++
+	l.Emit(ItemValue)
+
+	return l.LexWhitespace(ctx)
 }
 
 // Next return the Next rune in the input.
-func (l *Lexer) Next() (r rune, err error) {
-	if l.bufferIndex < len(l.buffer) {
-		l.bufferIndex++
-		r = l.buffer[l.bufferIndex-1]
-
-		return
+func (l *Lexer) Next() (r rune) {
+	if l.bufferIndex >= len(l.buffer) {
+		// Request data from the source.
+		if l.Source(0) < 1 {
+			r = emptyRune
+			return
+		}
 	}
 
-	// Check if end of source input
-	if r, _, err = l.source.ReadRune(); err != nil {
-		return
-	}
-
-	// Append rune to the buffer & update the buffer index
-	l.buffer = append(l.buffer, r)
+	r = l.buffer[l.bufferIndex]
 	l.bufferIndex++
 
 	return
 }
 
-// Peek return next rune, don't update index.
+// Peek return the next rune, without updating the index.
 func (l *Lexer) Peek() (r rune, err error) {
-	if l.bufferIndex < len(l.buffer) {
-		r = l.buffer[l.bufferIndex]
+	list, err := l.PeekN(1)
+	if err != nil {
 		return
 	}
-
-	if _, err = l.PeekNext(1); err == nil {
-		r = l.buffer[l.bufferIndex]
-	}
+	r = list[0]
 
 	return
 }
 
-// PeekNext return next N runes, without updating the index.
+// PeekN return the next N runes, without updating the index.
 //
-// This operation will return a shorter array if the end of the source input is reached.
-func (l *Lexer) PeekNext(length int) (rList []rune, err error) {
-	if length < 1 {
-		err = fmt.Errorf("invalid peek length: %d", length)
+// This operation will return a shorter slice if the end of the source is reached.
+func (l *Lexer) PeekN(n int) (list []rune, err error) {
+	if n < 1 {
+		err = fmt.Errorf("%w: %d", ErrInvalidPeekLength, n)
 		return
 	}
 
-	if l.bufferIndex+length < len(l.buffer) {
-		rList = l.buffer[l.bufferIndex:(l.bufferIndex + length)]
-		return
-	}
-
-	seen := 0
-	for ; seen < length; seen++ {
-		var r rune
-
-		if r, _, err = l.source.ReadRune(); err != nil {
-			if err != io.EOF {
-				return
-			}
-			err = nil
-
-			break
+	limit := l.bufferIndex + n
+	if limit >= len(l.buffer) {
+		// Request data from the source.
+		if n = l.Source(0); n < 1 {
+			err = io.EOF
+			return
 		}
 
-		l.buffer = append(l.buffer, r)
+		limit = l.bufferIndex + n
 	}
-	rList = l.buffer[l.bufferIndex:(l.bufferIndex + seen)]
+
+	list = l.buffer[l.bufferIndex:limit]
 
 	return
 }
 
 // Backup step back one rune.
-func (l *Lexer) Backup() error { return l.BackupFor(1) }
+func (l *Lexer) Backup() error { return l.BackupN(1) }
 
-// BackupFor step back for N runes.
-func (l *Lexer) BackupFor(length int) (err error) {
-	if l.bufferIndex < length {
-		err = fmt.Errorf("attempt to back up (%d) spaces on buffer index: %d", length, l.bufferIndex)
+// BackupN step back N runes.
+func (l *Lexer) BackupN(n int) (err error) {
+	if l.bufferIndex < n {
+		err = fmt.Errorf("%w: amount %d index: %d", ErrInvalidBackupAmount, n, l.bufferIndex)
 		return
 	}
-	l.bufferIndex -= length
+	l.bufferIndex -= n
 
 	return
 }
 
-// Ignore skip scanner input before the current buffer index.
-func (l *Lexer) Ignore() {
-	itemBytes := 0
+// Discard the buffer content before the current buffer index.
+func (l *Lexer) Discard() {
+	l.buffer = l.buffer[l.bufferIndex:]
+	l.bufferIndex = 0
+}
 
-	for index := 0; index < l.bufferIndex; index++ {
-		itemBytes += utf8.RuneLen(l.buffer[index])
+// Source runes from the source reader.
+func (l *Lexer) Source(amount int) (sourced int) {
+	if amount < defBufferSize {
+		amount = defBufferSize
 	}
 
-	l.sourceIndex += itemBytes
-	l.buffer = l.buffer[l.bufferIndex:]
+	buffer := make([]rune, amount)
+	for ; sourced < amount; sourced++ {
+		// NOTE: Function cost reduced by swapping the error check's condition.
+		if r, _, err := l.source.ReadRune(); err == nil {
+			buffer[sourced] = r
+			continue
+		}
 
-	l.bufferIndex = 0
+		// Error can only be io.EOF
+		break
+	}
+
+	l.buffer = append(l.buffer, buffer[:sourced]...)
+
+	return
 }
 
 // AcceptWhile consumes runes while condition is true.
 func (l *Lexer) AcceptWhile(fn ValidationFunction) (err error) {
-	r, err := l.Next()
-	if err != nil {
-		return
-	}
+	for {
+		r := l.Next()
+		if r == emptyRune {
+			// End of input.
+			return io.EOF
+		}
 
-	for fn(r) {
-		if r, err = l.Next(); err != nil {
-			return
+		// End of current token type.
+		if !fn(r) {
+			// TODO: Validate the necessity of propagating this error.
+			//
+			// An error at this point should never occur; unless the Lexer is modified externally.
+			return l.Backup()
 		}
 	}
-
-	// Backup if validation fails.
-	err = l.Backup()
-
-	return
 }
 
-// Emit send an Item specification to the LexType.
+// Emit sends an Item over the communication channel.
 func (l *Lexer) Emit(t ItemID) {
-	l.opts.Logger.Debug("Lexer buffer content: ", string(l.buffer[:l.bufferIndex]))
-	l.C <- Item{
-		ID:  t,
-		Pos: l.sourceIndex,
-		Val: string(l.buffer[:l.bufferIndex]),
+	runes := l.buffer[:l.bufferIndex]
+
+	bufSize := 0
+	for _, r := range runes {
+		bufSize += utf8.RuneLen(r)
 	}
-	l.Ignore()
+	buf := make([]byte, bufSize)
+
+	index := 0
+	for _, r := range runes {
+		index += utf8.EncodeRune(buf[index:], r)
+	}
+
+	if l.Debug {
+		// Debug operation makes this operation un-inlinable.
+		l.cfg.Logger.Debug("lexer Emit: ", string(buf))
+	}
+
+	l.c <- Item{
+		ID:  t,
+		Val: buf,
+	}
+	l.Discard()
+}
+
+// EmitEOF sends an ItemEOF Item over the communication channel.
+func (l *Lexer) EmitEOF() {
+	l.c <- Item{ID: ItemEOF}
 }
 
 // EmitError sends an error over the `Lexer`'s channel.
 //
-// This terminates the scan process (nextItem).
-func (l *Lexer) EmitError(err error) NextOperation {
-	l.C <- Item{
+// This terminates the scan process with an error or an ItemEOF for io.EOF.
+func (l *Lexer) EmitError(err error) {
+	if err == io.EOF {
+		l.EmitEOF()
+		return
+	}
+
+	l.c <- Item{
 		ID:  ItemError,
-		Pos: l.sourceIndex,
 		Err: err,
 	}
-	return nil
 }
 
-// NextItem return the next Item from the input.
-func (l *Lexer) NextItem() Item { return <-l.C }
+// Item return a lexed Item from the input.
+func (l *Lexer) Item() (i Item, ok bool) {
+	i, ok = <-l.c
+	return
+}
 
 // isSpace return true for whitespace, newline & carrier return.
-func isWhitespace(r rune) bool { return r == ' ' || r == '\t' || r == '\r' || r == '\n' }
+func isWhitespace(r rune) bool { return whitespace[r] }
 
 // isAlpha return true for an alphabetic sequence.
-func isAlpha(r rune) bool { return r == '_' || unicode.IsLetter(r) || r == '-' }
+func isAlpha(r rune) bool { return alphaSymbols[r] || unicode.IsLetter(r) }
 
 // isNumeric return true for a real number.
 func isNumeric(r rune) bool { return unicode.IsDigit(r) }
