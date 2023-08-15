@@ -29,6 +29,7 @@ All notable changes to RBAC will be documented in this file.
 - Update dependencies & git hook
 - Update dependencies
 - Update dependencies
+- Bump module to v3
 
 ### Performance
 
@@ -38,6 +39,7 @@ All notable changes to RBAC will be documented in this file.
 
 - Add misc changes
 - Revise methods
+- Remove v1 code
 
 ### Styling
 
