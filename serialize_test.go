@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"gitlab.com/fisherprime/hierarchy/v2/lexer"
+	"gitlab.com/fisherprime/hierarchy/v3/lexer"
 )
 
 func TestHierarchy_Serialize(t *testing.T) {

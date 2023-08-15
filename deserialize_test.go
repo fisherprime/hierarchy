@@ -10,7 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"gitlab.com/fisherprime/hierarchy/v2/lexer"
+	"gitlab.com/fisherprime/hierarchy/v3/lexer"
 )
 
 func TestDeserialize(t *testing.T) {

@@ -1,4 +1,4 @@
-module gitlab.com/fisherprime/hierarchy/v2
+module gitlab.com/fisherprime/hierarchy/v3
 
 go 1.20
 

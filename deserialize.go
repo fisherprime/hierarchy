@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"gitlab.com/fisherprime/hierarchy/v2/lexer"
+	"gitlab.com/fisherprime/hierarchy/v3/lexer"
 )
 
 // Deserialization errors.

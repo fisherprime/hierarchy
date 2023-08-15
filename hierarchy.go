@@ -16,10 +16,8 @@ import (
 // REF: https://www.geeksforgeeks.org/generic-tree-level-order-traversal
 //
 // REF: https://www.geeksforgeeks.org/serialize-deserialize-n-ary-tree
-//
-// runes are singe UTF-8 codepoints, not used as the hierarchy expects strings.
 
-// Constraint is a wrapper interface containing comparable & constraints.Ordered.
+// Constraint is a wrapper interface constraining the [Hierarchy]'s valid datatypes.
 type Constraint interface {
 	comparable
 	constraints.Ordered

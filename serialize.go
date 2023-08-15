@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"gitlab.com/fisherprime/hierarchy/v2/lexer"
+	"gitlab.com/fisherprime/hierarchy/v3/lexer"
 )
 
 // Serialize transforms a Hierarchy into a string.
