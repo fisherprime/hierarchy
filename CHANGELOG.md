@@ -30,6 +30,8 @@ All notable changes to RBAC will be documented in this file.
 - Update dependencies
 - Update dependencies
 - Bump module to v3
+- Update dependencies
+- Add vale config
 
 ### Performance
 
