@@ -30,3 +30,6 @@ assets/sql/dump.sql
 debug/
 *.csv
 config-sample.yml
+
+.ci/styles/*
+!.ci/styles/Vocab/Base
