@@ -1,43 +1,24 @@
 run:
   timeout: 3m
 
-presets:
-  - bugs
-  - comment
-  - complexity
-  - error
-  - format
-  - import
-  - metalinter
-  - module
-  - performance
-  - sql
-  - style
-  - test
-  - unused
-
 linters:
   enable:
-    - decorder
-    - dupl
-    - dupword
-    - dogsled
-    - errchkjson
-    - exhaustive
-    - gocyclo
-    - godot
-    - gofmt
-    - gofumpt
-    - goimports
-    - gomnd
-    - grouper
     - ifshort
-    - importas
-    - maintidx
-    - makezero
-    - misspell
-    - varnamelen
-    - whitespace
+
+  presets:
+    - bugs
+    - comment
+    - complexity
+    - error
+    - format
+    - import
+    - metalinter
+    - module
+    - performance
+    - sql
+    - style
+    - test
+    - unused
 
 linters-settings:
   decorder:
@@ -88,11 +69,11 @@ linters-settings:
   grouper:
     const-require-single-const: true
     const-require-grouping: true
-    import-require-single-const: true
+    import-require-single-import: true
     import-require-grouping: true
-    type-require-single-const: false
+    type-require-single-type: false
     type-require-grouping: false
-    var-require-single-const: true
+    var-require-single-var: true
     var-require-grouping: true
   ifshort:
     max-decl-lines: 2
@@ -102,7 +83,7 @@ linters-settings:
     no-extra-aliases: true
     alias:
       - pkg: github.com/volatiletech/authboss/v3/oauth2
-        alias: aboauth2 
+        alias: aboauth2
       - pkg: github.com/volatiletech/authboss/v3/recover
         alias: abrecover
       - pkg: github.com/go-openapi/runtime/middleware
@@ -115,10 +96,12 @@ linters-settings:
         alias: logformatters
   maintidx:
     under: 70
-  makezero:
-    suggest-new: true
-  misspell:
-    locale: UK
+  revive:
+    confidence: 0.1
+    rules:
+      - name: package-comments
+        severity: warning
+        disabled: true
   staticcheck:
     checks: ["all"]
   varnamelen:
