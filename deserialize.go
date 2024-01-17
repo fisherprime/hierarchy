@@ -24,8 +24,9 @@ func Deserialize[T Constraint](ctx context.Context, l *lexer.Lexer, options ...O
 
 	var v T
 	h = New(v, options...)
+
 	if _, err = h.deserialize(ctx, l); err != nil {
-		err = fmt.Errorf("%w: %v", ErrInvalidHierarchySrc, err)
+		err = fmt.Errorf("%w: %w", ErrInvalidHierarchySrc, err)
 		return
 	}
 
@@ -35,6 +36,7 @@ func Deserialize[T Constraint](ctx context.Context, l *lexer.Lexer, options ...O
 		return
 	default:
 		diff := l.ValueCounter() - l.EndCounter()
+
 		switch {
 		case diff > 0:
 			// Excessive values.
@@ -42,10 +44,10 @@ func Deserialize[T Constraint](ctx context.Context, l *lexer.Lexer, options ...O
 		case diff < 0:
 			// Excessive end markers.
 			err = fmt.Errorf("%w: %s +%d", ErrExcessiveEndMarkers, string(l.EndMarker()), diff*-1)
-
 		default:
 			// Valid
 		}
+
 		if err != nil {
 			return
 		}
@@ -79,6 +81,7 @@ func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer, options 
 		// Stop input processing.
 		end = true
 		err = item.Err
+
 		return
 	case lexer.ItemEndMarker:
 		end = true
@@ -101,6 +104,7 @@ func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer, options 
 		return
 	default:
 		h.value = value
+
 		for {
 			var endChildren bool
 

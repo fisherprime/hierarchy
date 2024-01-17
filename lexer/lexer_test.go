@@ -21,7 +21,9 @@ func BenchmarkLexer_Lex(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		b.StopTimer()
+
 		l := New(WithLogger(logger), WithSource(strings.NewReader(src)))
+
 		b.StartTimer()
 
 		go l.Lex(ctx)

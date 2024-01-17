@@ -363,8 +363,7 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context, parentValue ...T)
 //
 // An error here indicates a cyclic [Hierarchy].
 func (h *Hierarchy[T]) Leaves(ctx context.Context) (termNodes List[T], err error) {
-	// An RLock is unnecessary at this point.
-
+	// NOTE: An RLock is unnecessary at this point.
 	termNodes = make(List[T], 0)
 	traverseChan := make(chan TraverseComm[T], traverseBufferSize)
 
@@ -429,6 +428,7 @@ func (h *Hierarchy[T]) Locate(ctx context.Context, childValue T, parentValue ...
 		err = fmt.Errorf("(%v) %w", childValue, ErrNotFound)
 		return
 	}
+
 	locateCancel()
 
 	if child, err = resl.node, resl.err; child != nil {
@@ -480,10 +480,12 @@ func (h *Hierarchy[T]) locate(ctx context.Context, wkPool *ants.Pool, value T, t
 	default:
 		internalWG := new(sync.WaitGroup)
 		internalWG.Add(len(h.children))
+
 		for _, v := range h.children {
 			// wkPool.Submit(func() { v.locate(ctx, wkPool, value, traverseChan, internalWG) })
 			go v.locate(ctx, wkPool, value, traverseChan, internalWG)
 		}
+
 		internalWG.Wait()
 	}
 }

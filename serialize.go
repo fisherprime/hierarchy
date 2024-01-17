@@ -25,6 +25,7 @@ func (h *Hierarchy[T]) Serialize(ctx context.Context, cfg *lexer.Config) (output
 	if !fProceed {
 		return
 	}
+
 	var buffer strings.Builder
 	if _, err = buffer.WriteString(fValue); err != nil {
 		// Invalidate serialization output.

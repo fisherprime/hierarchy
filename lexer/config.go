@@ -39,9 +39,11 @@ func (c *Config) Validate() {
 	if c.EndMarker == emptyRune {
 		c.EndMarker = DefaultEndMarker
 	}
+
 	if c.Splitter == emptyRune {
 		c.Splitter = DefaultSplitter
 	}
+
 	if c.Logger == nil {
 		c.Logger = logrus.New()
 	}

@@ -8,6 +8,7 @@ package lexer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -162,6 +163,7 @@ func (l *Lexer) LexWhitespace(ctx context.Context) NextOperation {
 	l.Discard()
 
 	next := l.Next()
+
 	switch {
 	case next == emptyRune:
 		return nil
@@ -229,6 +231,7 @@ func (l *Lexer) Peek() (r rune, err error) {
 	if err != nil {
 		return
 	}
+
 	r = list[0]
 
 	return
@@ -268,6 +271,7 @@ func (l *Lexer) BackupN(n int) (err error) {
 		err = fmt.Errorf("%w: amount %d index: %d", ErrInvalidBackupAmount, n, l.bufferIndex)
 		return
 	}
+
 	l.bufferIndex -= n
 
 	return
@@ -286,6 +290,7 @@ func (l *Lexer) Source(amount int) (sourced int) {
 	}
 
 	buffer := make([]rune, amount)
+
 	for ; sourced < amount; sourced++ {
 		// NOTE: Function cost reduced by swapping the error check's condition.
 		if r, _, err := l.source.ReadRune(); err == nil {
@@ -313,9 +318,8 @@ func (l *Lexer) AcceptWhile(fn ValidationFunction) (err error) {
 
 		// End of current token type.
 		if !fn(r) {
-			// TODO: Validate the necessity of propagating this error.
-			//
-			// An error at this point should never occur; unless the Lexer is modified externally.
+			// NOTE: An error at this point should never occur; unless the Lexer is modified
+			// externally.
 			return l.Backup()
 		}
 	}
@@ -329,6 +333,7 @@ func (l *Lexer) Emit(t ItemID) {
 	for _, r := range runes {
 		bufSize += utf8.RuneLen(r)
 	}
+
 	buf := make([]byte, bufSize)
 
 	index := 0
@@ -357,7 +362,7 @@ func (l *Lexer) EmitEOF() {
 //
 // This terminates the scan process with an error or an ItemEOF for io.EOF.
 func (l *Lexer) EmitError(err error) {
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		l.EmitEOF()
 		return
 	}

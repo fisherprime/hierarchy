@@ -112,6 +112,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 			if b.cfg.Debug {
 				b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
 			}
+
 			err = fmt.Errorf("%w: %w: %v", ErrBuildHierarchy, ErrInvalidHierarchySrc, err)
 		}
 	}()
@@ -130,6 +131,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 		return
 	default:
 		rootIndex := 0
+
 		for index := range b.builders {
 			if b.builders[index].Parent() != rootValue {
 				continue
@@ -140,11 +142,13 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 				err = ErrMultipleRootNodes
 				return
 			}
+
 			id := b.builders[index].Value()
 			h, buildCache[id] = New(id, options...), struct{}{}
 
 			rootIndex = index
 		}
+
 		if h == nil {
 			err = ErrMissingRootNode
 			return
@@ -152,10 +156,13 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 
 		// Remove the root node from the build source..
 		prevLen := b.Len()
+
 		if b.cfg.Debug {
 			b.cfg.Logger.Debugf("source: %+v\n", *b)
 		}
+
 		b.Cut(rootIndex)
+
 		if b.cfg.Debug {
 			b.cfg.Logger.Debugf("source (without root): %+v\n", *b)
 		}
@@ -185,7 +192,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 				if parent, err = h.locateParent(ctx, parentID); err != nil {
 					if errors.Is(err, ErrNotFound) {
 						// Inconsistency between the cache & hierarchy.
-						err = fmt.Errorf("%w: %v", ErrInconsistentBuildCache, err)
+						err = fmt.Errorf("%w: %w", ErrInconsistentBuildCache, err)
 					}
 
 					return
