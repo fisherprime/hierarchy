@@ -1,7 +1,7 @@
 # Hierarchy
 
-The `hierarchy` library implements a generic tree intended to represent hierarchies of data of the
-`comparable` & `constraints.Ordered` constraints.
+The `hierarchy` library provides a generic tree data structure for types satisfying Golang's
+`comparable` and `constraints.Ordered` constraints.
 
 ## Install
 
