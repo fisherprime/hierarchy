@@ -11,11 +11,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -89,7 +88,7 @@ func New(opts ...Option) *Lexer {
 			Debug:     false,
 			EndMarker: DefaultEndMarker,
 			Splitter:  DefaultSplitter,
-			Logger:    logrus.New(),
+			Logger:    slog.Default(),
 		},
 
 		c: make(chan Item, defBufferSize),
@@ -118,7 +117,7 @@ func WithEndMarker(r rune) Option { return func(l *Lexer) { l.cfg.EndMarker = r 
 func WithSplitter(r rune) Option { return func(l *Lexer) { l.cfg.Splitter = r } }
 
 // WithLogger configures the logger option.
-func WithLogger(logger logrus.FieldLogger) Option { return func(l *Lexer) { l.cfg.Logger = logger } }
+func WithLogger(logger *slog.Logger) Option { return func(l *Lexer) { l.cfg.Logger = logger } }
 
 // WithSource configures the source option.
 func WithSource(source io.RuneReader) Option { return func(l *Lexer) { l.source = source } }
@@ -136,7 +135,7 @@ func (l *Lexer) ValueCounter() int { return l.valueCounter }
 func (l *Lexer) EndCounter() int { return l.endCounter }
 
 // Logger obtains the logger.
-func (l *Lexer) Logger() logrus.FieldLogger { return l.cfg.Logger }
+func (l *Lexer) Logger() *slog.Logger { return l.cfg.Logger }
 
 // Lex lexes the input by executing state functions.
 func (l *Lexer) Lex(ctx context.Context) {

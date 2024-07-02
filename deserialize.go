@@ -53,7 +53,7 @@ func Deserialize[T Constraint](ctx context.Context, l *lexer.Lexer, options ...O
 		}
 
 		children, _ := h.AllChildrenByLevel(ctx)
-		l.Logger().Debugf("hierarchy: %+v", children)
+		l.Logger().Debug("Deserialize", "hierarchy", children)
 	}
 
 	return
@@ -71,7 +71,7 @@ func (h *Hierarchy[T]) deserialize(ctx context.Context, l *lexer.Lexer, options 
 		return
 	}
 
-	l.Logger().Debugf("lexed item: %+v", item)
+	l.Logger().Debug("deserialize", "lexed item", item)
 
 	switch item.ID {
 	case lexer.ItemEOF:

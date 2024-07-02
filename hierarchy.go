@@ -2,15 +2,15 @@
 package hierarchy
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 
 	"github.com/panjf2000/ants/v2"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/constraints"
 )
 
 // REF: https://www.geeksforgeeks.org/generic-tree-level-order-traversal
@@ -20,7 +20,7 @@ import (
 // Constraint is a wrapper interface constraining the [Hierarchy]'s valid datatypes.
 type Constraint interface {
 	comparable
-	constraints.Ordered
+	cmp.Ordered
 }
 
 type (
@@ -52,7 +52,7 @@ type (
 		// Logger for [Hierarchy] messages.
 		//
 		// Preferring a public field to allow for sharing.
-		Logger logrus.FieldLogger
+		Logger *slog.Logger
 		Debug  bool
 	}
 
@@ -97,7 +97,7 @@ var defConfig = DefConfig()
 // DefConfig obtains the package's [Hierarchy] default options.
 func DefConfig() *Config {
 	return &Config{
-		Logger: logrus.New(),
+		Logger: slog.Default(),
 		Debug:  false,
 	}
 }
@@ -277,7 +277,7 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context, parentValue ...T) (child
 	}
 
 	if parent.cfg.Debug {
-		parent.cfg.Logger.Debugf("walked: %+v", children)
+		parent.cfg.Logger.Debug("AllChildren", "walked nodes", children)
 	}
 
 	if len(children) > 0 {
@@ -285,7 +285,7 @@ func (h *Hierarchy[T]) AllChildren(ctx context.Context, parentValue ...T) (child
 		children = (children)[1:]
 
 		if parent.cfg.Debug {
-			parent.cfg.Logger.Debugf("children: %+v", children)
+			parent.cfg.Logger.Debug("AllChildren", "children", children)
 		}
 	}
 
@@ -340,7 +340,7 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context, parentValue ...T)
 	}
 
 	if parent.cfg.Debug {
-		parent.cfg.Logger.Debugf("walked: %+v", children)
+		parent.cfg.Logger.Debug("AllChildrenByLevel walk", "nodes", children)
 	}
 
 	if len(children) > 0 {
@@ -348,7 +348,7 @@ func (h *Hierarchy[T]) AllChildrenByLevel(ctx context.Context, parentValue ...T)
 		children = (children)[1:]
 
 		if parent.cfg.Debug {
-			parent.cfg.Logger.Debugf("children: %+v", children)
+			parent.cfg.Logger.Debug("AllChildrenByLevel walk", "children", children)
 		}
 	}
 
@@ -450,7 +450,7 @@ func (h *Hierarchy[T]) locate(ctx context.Context, wkPool *ants.Pool, value T, t
 
 	defer wg.Done()
 	if h.cfg.Debug {
-		h.cfg.Logger.Debugf("locate val %s in %+v", value, h)
+		h.cfg.Logger.Debug("locate", "value", value, "hierarchy", h)
 	}
 
 	if h.value == value {

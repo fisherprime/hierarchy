@@ -3,12 +3,11 @@ package hierarchy
 
 import (
 	"context"
+	"log/slog"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 
 	"gitlab.com/fisherprime/hierarchy/v3/lexer"
 )
@@ -20,7 +19,7 @@ func TestDeserialize(t *testing.T) {
 		hierCfg []Option[int]
 	}
 
-	logger := logrus.New()
+	logger := slog.Default()
 	hierCfg := []Option[int]{WithConfig[int](&Config{Logger: logger})}
 
 	tests := []struct {

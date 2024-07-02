@@ -2,13 +2,13 @@
 package lexer
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 type (
 	// Config defines configuration options for the Lexer's operations.
 	Config struct {
-		Logger    logrus.FieldLogger
+		Logger    *slog.Logger
 		EndMarker rune
 		Debug     bool
 		Splitter  rune
@@ -30,7 +30,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		EndMarker: DefaultEndMarker,
 		Splitter:  DefaultSplitter,
-		Logger:    logrus.New(),
+		Logger:    slog.Default(),
 	}
 }
 
@@ -45,6 +45,6 @@ func (c *Config) Validate() {
 	}
 
 	if c.Logger == nil {
-		c.Logger = logrus.New()
+		c.Logger = slog.Default()
 	}
 }

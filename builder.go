@@ -110,7 +110,7 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 		if err != nil {
 			// Avoid unnecessary calls.
 			if b.cfg.Debug {
-				b.cfg.Logger.Debugf("current hierarchy: %s \nsource remnants: %s", spew.Sprint(h), spew.Sprint(b))
+				b.cfg.Logger.Debug("Build", "current hierarchy", spew.Sprint(h), "source remnants", spew.Sprint(b))
 			}
 
 			err = fmt.Errorf("%w: %w: %v", ErrBuildHierarchy, ErrInvalidHierarchySrc, err)
@@ -158,13 +158,13 @@ func (b *BuildSource[T]) Build(ctx context.Context, options ...Option[T]) (h *Hi
 		prevLen := b.Len()
 
 		if b.cfg.Debug {
-			b.cfg.Logger.Debugf("source: %+v\n", *b)
+			b.cfg.Logger.Debug("Build", "source", *b)
 		}
 
 		b.Cut(rootIndex)
 
 		if b.cfg.Debug {
-			b.cfg.Logger.Debugf("source (without root): %+v\n", *b)
+			b.cfg.Logger.Debug("Build", "source (without root)", *b)
 		}
 
 		for {
